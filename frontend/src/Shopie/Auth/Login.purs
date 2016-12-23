@@ -186,7 +186,7 @@ handleLogin
   -> Passwords
   -> ExceptT FieldError (LoginDSL g) Unit
 handleLogin em psw = do
-  v <- ExceptT (pure $ runErrors $ loginStateV em psw)
+  v <- except $ runErrors $ loginStateV em psw
   lift $ H.set v
   res' <- authenticate $ passwordCreds em psw
   case res' of
