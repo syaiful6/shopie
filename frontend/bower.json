@@ -9,17 +9,15 @@
     "dist"
   ],
   "dependencies": {
+    "purescript-affjax-algebra": "^3.0.0",
     "purescript-affjax": "^3.0.0",
     "purescript-aff-bus": "^1.0.0",
     "purescript-aff-future": "^1.0.0",
     "purescript-argonaut": "^2.0.0",
     "purescript-const": "^2.0.0",
     "purescript-console": "^2.0.0",
-    "purescript-day": "^7.0.0",
     "purescript-errors": "^2.1.0",
     "purescript-functors": "^1.0.0",
-    "purescript-freeap": "^2.0.0",
-    "purescript-foreign": "^3.0.0",
     "purescript-fork": "^1.0.0",
     "purescript-halogen": "^0.12.0",
     "purescript-js-timers": "^2.0.0",
@@ -32,6 +30,7 @@
     "purescript-pathy": "^3.0.2",
     "purescript-random": "^2.0.0",
     "purescript-routing": "^3.0.0",
+    "purescript-uri": "^2.0.0",
     "purescript-validation": "^2.0.0"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-module Shopie.Applicative.FreeAp where
+module Control.Applicative.Free where
 
 import Prelude
 
@@ -6,9 +6,10 @@ import Control.Comonad (class Comonad, extract)
 import Control.Extend (class Extend, extend)
 
 import Data.Const (Const(..))
-import Data.Functor.Day (Day, day, runDay)
 import Data.Monoid (class Monoid)
 import Data.Newtype (unwrap)
+
+import Data.Functor.Day (Day, day, runDay)
 
 
 data FreeAp f a

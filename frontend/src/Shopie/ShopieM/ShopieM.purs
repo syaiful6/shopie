@@ -10,7 +10,7 @@ module Shopie.ShopieM.ShopieM
 
 import Prelude
 
-import Control.Applicative.Free (FreeAp, liftFreeAp, hoistFreeAp)
+import Control.Applicative.Free (FreeAp, liftAp, hoistAp)
 import Control.Monad.Aff.Class (class MonadAff, liftAff)
 import Control.Monad.Eff.Class (class MonadEff, liftEff)
 import Control.Monad.Aff.Free (class Affable, fromAff)
@@ -88,7 +88,7 @@ instance affableShopieM :: Affable eff m => Affable eff (ShopieM g m) where
   fromAff = ShopieM <<< liftF <<< Lift <<< fromAff
 
 instance parallelShopieM :: Parallel (ShopieAp g m) (ShopieM g m) where
-  parallel = ShopieAp <<< liftFreeAp
+  parallel = ShopieAp <<< liftAp
   sequential = ShopieM <<< liftF <<< Par
 
 instance monadForkShopieM :: MonadAff eff m => MonadFork Error (ShopieM g m) where
@@ -132,6 +132,6 @@ hoistM nat (ShopieM fa) = ShopieM (hoistFree go fa)
     Lift q -> Lift (nat q)
     Notify n a -> Notify n a
     Halt msg a -> Halt msg a
-    Par p -> Par (over ShopieAp (hoistFreeAp (hoistM nat)) p)
+    Par p -> Par (over ShopieAp (hoistAp (hoistM nat)) p)
     Fork f -> Fork (SF.hoistFork (hoistM nat) f)
     Ask f -> Ask f

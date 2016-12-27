@@ -23,10 +23,13 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (class Monoid)
 import Data.StrMap as SM
 import Data.Tuple (Tuple(Tuple))
+import Data.MediaType (MediaType(..))
 
 import Network.JsonApi.Link (Links)
 import Network.JsonApi.Meta (Meta)
 import Network.JsonApi.Resource (Resource, class ResourceAble, toResource)
+import Network.HTTP.Affjax.Request (class Requestable)
+import Unsafe.Coerce as U
 
 
 data Document a = Document
@@ -35,6 +38,10 @@ data Document a = Document
   , _meta :: Maybe Meta
   , _included :: List Json
   }
+
+instance requestableDocument :: EncodeJson a => Requestable (Document a) where
+  toRequest d = Tuple (Just (MediaType "application/vnd.api+json"))
+                      (U.unsafeCoerce (encodeJson d)) 
 
 instance decodeJsonDocument :: DecodeJson a => DecodeJson (Document a) where
   decodeJson = decodeJson >=> \v ->

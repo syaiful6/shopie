@@ -2,7 +2,7 @@ module Shopie.Interpreter.ShopieM where
 
 import Shopie.Prelude
 
-import Control.Applicative.Free (hoistFreeAp, retractFreeAp)
+import Control.Applicative.Free (hoistAp, restractAp)
 import Control.Coroutine as Co
 import Control.Monad.Aff (Aff, forkAff, attempt, later')
 import Control.Monad.Aff.AVar (AffAVar)
@@ -69,7 +69,7 @@ evalShopieM (ShopieM m') = foldFree go m'
       Halt _ a ->
         pure a
       Par (ShopieAp p) ->
-        sequential $ retractFreeAp $ hoistFreeAp (parallel <<< evalShopieM) p
+        sequential $ restractAp $ hoistAp (parallel <<< evalShopieM) p
       Fork f ->
         goFork f
       Ask f ->
