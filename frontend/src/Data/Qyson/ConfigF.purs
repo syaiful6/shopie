@@ -7,7 +7,7 @@ import Control.Monad.Free (Free, liftF)
 
 import Data.Profunctor (class Profunctor, dimap, rmap)
 import Data.Tuple (Tuple(Tuple))
-import Data.Functor.Pairing (Pairing, sym, fnTuple)
+import Data.Functor.Pairing (class Pairing, pair)
 
 data ConfigF c a = ConfigF (c -> a)
 
@@ -31,8 +31,8 @@ instance functorCoconfig :: Functor (CoconfigF c) where
 coConfigF :: forall c a. c -> a -> CoconfigF c a
 coConfigF c a = CoconfigF $ Tuple c a
 
-configPairing :: forall c. Pairing (CoconfigF c) (ConfigF c)
-configPairing f (CoconfigF t) (ConfigF k) = sym fnTuple f t k
+instance pairConfig :: Pairing (ConfigF c) (CoconfigF c) where
+  pair f (ConfigF c) (CoconfigF co) = pair f c co
 
 mkCoconfig :: forall c a. c -> a -> Cofree (CoconfigF c) a
 mkCoconfig c a = unfoldCofree a id (coConfigF c)

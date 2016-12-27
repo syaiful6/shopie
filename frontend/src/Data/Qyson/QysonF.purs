@@ -18,14 +18,14 @@ data QysonF a
   | ReadFile FilePath (Maybe Pagination) (Json !~> a)
   | WriteFile FilePath Json (Unit !~> a)
   | AppendFile FilePath Json (Unit !~> a)
-  | DeleteData AnyPath (Unit !~> a)
+  | DeleteFile AnyPath (Unit !~> a)
 
 instance functorQysonF :: Functor QysonF where
   map f (ReadQuery d vp mp g) = ReadQuery d vp mp (f <<< g)
   map f (ReadFile fp mp g) = ReadFile fp mp (f <<< g)
   map f (WriteFile fp dc g) = WriteFile fp dc (f <<< g)
   map f (AppendFile fp dc g) = AppendFile fp dc (f <<< g)
-  map f (DeleteData apt g) = DeleteData apt (f <<< g)
+  map f (DeleteFile apt g) = DeleteFile apt (f <<< g)
 
 type QysonFE a = QysonF (ResponseQ a)
 
@@ -42,4 +42,4 @@ appendFile :: FilePath -> Json -> QysonFE Unit
 appendFile fp jp = AppendFile fp jp id
 
 deleteData :: AnyPath -> QysonFE Unit
-deleteData apt = DeleteData apt id
+deleteData apt = DeleteFile apt id

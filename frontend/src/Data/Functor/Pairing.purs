@@ -1,26 +1,16 @@
-module Data.Functor.Pairing
-  ( Pairing
-  , zap
-  , sym
-  , identity
-  , fnTuple
-  , productCoproduct
-  , stateStore
-  , readerEnv
-  , writerTraced
-  , freeCofree
-  ) where
+module Data.Functor.Pairing where
 
 import Prelude
 
-import Control.Comonad.Cofree (Cofree, head, tail)
+import Control.Comonad.Cofree (Cofree, explore)
 import Control.Comonad.Env.Trans (EnvT(..))
 import Control.Comonad.Store.Trans (StoreT(..))
 import Control.Comonad.Traced.Trans (TracedT(..))
-import Control.Monad.Free (Free, resume)
+import Control.Monad.Free (Free)
 import Control.Monad.Reader.Trans (ReaderT(..))
 import Control.Monad.State.Trans (StateT(..))
 import Control.Monad.Writer.Trans (WriterT(..))
+
 import Data.Either (Either(..))
 import Data.Functor.Product (Product(..))
 import Data.Functor.Coproduct (Coproduct(..))
@@ -28,51 +18,38 @@ import Data.Identity (Identity(..))
 import Data.Tuple (Tuple(..), uncurry)
 
 
-type Pairing f g = forall a b c. (a -> b -> c) -> f a -> g b -> c
+class Pairing f g | f -> g, g -> f where
+  pair :: forall a b c. (a -> b -> c) -> f a -> g b -> c
 
-zap :: forall f g a b. Pairing f g -> f (a -> b) -> g a -> b
-zap pairing = pairing ($)
+zap :: forall f g a b. Pairing f g => f (a -> b) -> g a -> b
+zap = pair ($)
 
 -- | Pairing is symmetric
-sym :: forall f g. Pairing f g -> Pairing g f
-sym pairing f ga fb = pairing (flip f) fb ga
+sym :: forall f g a b c. Pairing f g => (a -> b -> c) -> g a -> f b -> c
+sym f ga fb = pair (flip f) fb ga
 
 -- | The identity functor pairs with itself
-identity :: Pairing Identity Identity
-identity f (Identity a) (Identity b) = f a b
+instance pairingIdentity :: Pairing Identity Identity where
+  pair f (Identity a) (Identity b) = f a b
 
--- | Functor products pair with functor coproducts
-productCoproduct
-  :: forall f1 g1 f2 g2
-   . Pairing f1 g1
-  -> Pairing f2 g2
-  -> Pairing (Product f1 f2) (Coproduct g1 g2)
-productCoproduct p1 p2 f (Product (Tuple f1 f2)) (Coproduct e) =
-  case e of
-    Left g1 -> p1 f f1 g1
-    Right g2 -> p2 f f2 g2
+instance pairingArrowTuple :: Pairing ((->) a) (Tuple a) where
+  pair f t = uncurry (f <<< t)
 
-fnTuple :: forall a. Pairing ((->) a) (Tuple a)
-fnTuple p f = uncurry (p <<< f)
+instance pairingProd :: (Pairing f1 g1, Pairing f2 g2)
+  => Pairing (Product f1 f2) (Coproduct g1 g2) where
+    pair f (Product (Tuple f1 f2)) (Coproduct e) = case e of
+      Left g1 -> pair f f1 g1
+      Right g2 -> pair f f2 g2
 
--- | `StateT` pairs with `StoreT`.
-stateStore :: forall f g s. Pairing f g -> Pairing (StateT s f) (StoreT s g)
-stateStore pairing f (StateT state) (StoreT (Tuple gf s)) =
-  pairing (\(Tuple a s1) f1 -> f a (f1 s1)) (state s) gf
+instance pairingStateStore :: Pairing f g => Pairing (StateT s f) (StoreT s g) where
+  pair f (StateT st) (StoreT (Tuple gf s)) =
+    pair (\(Tuple a s1) f1 -> f a (f1 s1)) (st s) gf
 
--- | `ReaderT` pairs with `EnvT`.
-readerEnv :: forall f g e. Pairing f g -> Pairing (ReaderT e f) (EnvT e g)
-readerEnv pairing f (ReaderT reader) (EnvT (Tuple e gb)) =
-  pairing f (reader e) gb
+instance pairingReaderEnv :: Pairing f g => Pairing (ReaderT e f) (EnvT e g) where
+  pair f (ReaderT reader) (EnvT (Tuple e gb)) = pair f (reader e) gb
 
--- | `WriterT` pairs with `TracedT`.
-writerTraced :: forall f g w. Pairing f g -> Pairing (WriterT w f) (TracedT w g)
-writerTraced pairing f (WriterT writer) (TracedT gf) =
-  pairing (\(Tuple a w) f1 -> f a (f1 w)) writer gf
+instance pairingwriterTraced :: Pairing f g => Pairing (WriterT w f) (TracedT w g) where
+  pair f (WriterT writer) (TracedT gf) =  pair (\(Tuple a w) f1 -> f a (f1 w)) writer gf
 
--- | `Free` pairs with `Cofree`.
-freeCofree :: forall f g. Functor f => Pairing f g -> Pairing (Free f) (Cofree g)
-freeCofree pairing f free cofree =
-  case resume free of
-    Left fa -> pairing (freeCofree pairing f) fa (tail cofree)
-    Right a -> f a (head cofree)
+instance pairingFreeCofree :: (Functor f, Functor g, Pairing f g) => Pairing (Free f) (Cofree g) where
+  pair f free cofree = explore zap (map f free) cofree
