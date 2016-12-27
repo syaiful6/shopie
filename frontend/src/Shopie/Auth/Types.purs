@@ -5,7 +5,8 @@ import Shopie.Prelude
 import Control.Monad.Eff (Eff)
 import Control.Monad.Free (Free, liftF)
 
-import Data.Argonaut (class EncodeJson, class DecodeJson, decodeJson, encodeJson, jsonEmptyObject, (~>), (:=), (.?))
+import Data.Argonaut (class EncodeJson, class DecodeJson, decodeJson, encodeJson,
+                      jsonEmptyObject, (~>), (:=), (.?))
 import DOM (DOM)
 
 import Halogen.Query.EventSource as ES
