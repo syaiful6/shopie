@@ -2,12 +2,14 @@ module Data.Qyson.ConfigF where
 
 import Prelude
 
-import Control.Comonad.Cofree (Cofree, unfoldCofree)
+import Control.Comonad.Cofree (Cofree)
 import Control.Monad.Free (Free, liftF)
 
 import Data.Profunctor (class Profunctor, dimap, rmap)
 import Data.Tuple (Tuple(Tuple))
 import Data.Functor.Pairing (class Pairing, pair)
+
+import Data.Qyson.Utils (coiter)
 
 data ConfigF c a = ConfigF (c -> a)
 
@@ -35,4 +37,4 @@ instance pairConfig :: Pairing (ConfigF c) (CoconfigF c) where
   pair f (ConfigF c) (CoconfigF co) = pair f c co
 
 mkCoconfig :: forall c a. c -> a -> Cofree (CoconfigF c) a
-mkCoconfig c a = unfoldCofree a id (coConfigF c)
+mkCoconfig c = coiter (coConfigF c)

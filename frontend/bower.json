@@ -9,7 +9,6 @@
     "dist"
   ],
   "dependencies": {
-    "purescript-affjax-algebra": "^3.0.0",
     "purescript-affjax": "^3.0.0",
     "purescript-aff-bus": "^1.0.0",
     "purescript-aff-future": "^1.0.0",

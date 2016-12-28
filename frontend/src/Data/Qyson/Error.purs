@@ -4,6 +4,7 @@ import Prelude
 
 import Data.Either (Either)
 import Data.Maybe (Maybe(Just, Nothing))
+import Data.Tuple (Tuple)
 import Control.Monad.Eff.Exception (Error, error, message)
 
 
@@ -14,7 +15,7 @@ data ErrorQ
   | Unauthorized (Maybe UnauthorizedMessage)
   | Forbidden
   | PaymentRequired
-  | Error Error
+  | ExceptQ Error
 
 instance showErrorQ :: Show ErrorQ where
   show NotFound = "NotFound"
@@ -22,7 +23,7 @@ instance showErrorQ :: Show ErrorQ where
   show (Unauthorized (Just (UnauthorizedMessage msg))) = "Unauthorized: " <> msg
   show Forbidden = "Forbidden"
   show PaymentRequired = "PaymentRequired"
-  show (Error err) = "Unknown " <> show err
+  show (ExceptQ err) = "Unknown " <> show err
 
 printErrorQ :: ErrorQ -> String
 printErrorQ = case _ of
@@ -30,14 +31,17 @@ printErrorQ = case _ of
   Unauthorized _ -> "Resource is unavailable, authorization is required"
   Forbidden -> "Resource is unavailable, the current authorization credentials do not grant access to the resource"
   PaymentRequired -> "Resource is unavailable, payment is required to use this feature"
-  Error err -> message err
+  ExceptQ err -> message err
 
 lowerErrorQ :: ErrorQ → Error
 lowerErrorQ = case _ of
-  Error err -> err
+  ExceptQ err -> err
   qe -> error (printErrorQ qe)
 
 type ResponseQ resp = Either ErrorQ resp
 type ContinuationQ resp next = ResponseQ resp -> next
 
-infixr 2 type ContinuationQ as !~>
+type CoContinuanQ resp next = Tuple (ResponseQ resp) next
+
+infixr 2 type ContinuationQ as :~>
+infixr 2 type CoContinuanQ as <~:

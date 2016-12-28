@@ -7,18 +7,20 @@ module Data.Qyson.QysonF
 import Prelude
 
 import Data.Argonaut.Core (Json)
+import Data.Functor.Pairing (class Pairing, pair)
 import Data.Maybe (Maybe)
-import Data.Qyson.Error (type (!~>), ResponseQ, ErrorQ(..), UnauthorizedMessage(..),
+
+import Data.Qyson.Error (type (:~>), type (<~:), ResponseQ, ErrorQ(..), UnauthorizedMessage(..),
                          lowerErrorQ, printErrorQ)
-import Data.Qyson.Types (AnyPath, FilePath, DirPath, Pagination, Vars)
+import Data.Qyson.Types (AnyPath, FilePath, DirPath, Pagination(..), Vars)
 
 
 data QysonF a
-  = ReadQuery DirPath Vars (Maybe Pagination) (Json !~> a)
-  | ReadFile FilePath (Maybe Pagination) (Json !~> a)
-  | WriteFile FilePath Json (Unit !~> a)
-  | AppendFile FilePath Json (Unit !~> a)
-  | DeleteFile AnyPath (Unit !~> a)
+  = ReadQuery DirPath Vars (Maybe Pagination) (Json :~> a)
+  | ReadFile FilePath (Maybe Pagination) (Json :~> a)
+  | WriteFile FilePath Json (Unit :~> a)
+  | AppendFile FilePath Json (Unit :~> a)
+  | DeleteFile AnyPath (Unit :~> a)
 
 instance functorQysonF :: Functor QysonF where
   map f (ReadQuery d vp mp g) = ReadQuery d vp mp (f <<< g)
@@ -41,5 +43,33 @@ writeFile fp jp = WriteFile fp jp id
 appendFile :: FilePath -> Json -> QysonFE Unit
 appendFile fp jp = AppendFile fp jp id
 
-deleteData :: AnyPath -> QysonFE Unit
-deleteData apt = DeleteFile apt id
+deleteFile :: AnyPath -> QysonFE Unit
+deleteFile apt = DeleteFile apt id
+
+type CoqysonR a =
+  { readQueryH  :: DirPath -> Vars -> Maybe Pagination -> Json <~: a
+  , readfileH   :: FilePath -> Maybe Pagination -> Json <~: a
+  , writeFileH  :: FilePath -> Json -> Unit <~: a
+  , appendFileH :: FilePath -> Json -> Unit <~: a
+  , deleteFileH :: AnyPath -> Unit <~: a
+  }
+
+data CoqysonF a = CoqysonF (CoqysonR a)
+
+instance functorCoQysonF :: Functor CoqysonF where
+  map f (CoqysonF rc) = CoqysonF $
+    { readQueryH: map (map (map (map f))) rc.readQueryH
+    , readfileH: map (map (map f)) rc.readfileH
+    , writeFileH: map (map (map f)) rc.writeFileH
+    , appendFileH: map (map (map f)) rc.appendFileH
+    , deleteFileH: map (map f) rc.deleteFileH
+    }
+
+type CoqysonFE a = CoqysonF (ResponseQ a)
+
+instance pairQysonF :: Pairing QysonF CoqysonF where
+  pair f (ReadQuery d vp mp k) (CoqysonF rc) = pair f k (rc.readQueryH d vp mp)
+  pair f (ReadFile fp mp k) (CoqysonF rc) = pair f k (rc.readfileH fp mp)
+  pair f (WriteFile fp dc k) (CoqysonF rc) = pair f k (rc.writeFileH fp dc)
+  pair f (AppendFile fp dc k) (CoqysonF rc) = pair f k (rc.appendFileH fp dc)
+  pair f (DeleteFile apt k) (CoqysonF rc) = pair f k (rc.deleteFileH apt)

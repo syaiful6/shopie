@@ -52,4 +52,4 @@ instance pairingwriterTraced :: Pairing f g => Pairing (WriterT w f) (TracedT w 
   pair f (WriterT writer) (TracedT gf) =  pair (\(Tuple a w) f1 -> f a (f1 w)) writer gf
 
 instance pairingFreeCofree :: (Functor f, Functor g, Pairing f g) => Pairing (Free f) (Cofree g) where
-  pair f free cofree = explore zap (map f free) cofree
+  pair f = explore zap <<< map f

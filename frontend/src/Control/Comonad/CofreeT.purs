@@ -22,7 +22,7 @@ data CofreeF f a b = CofreeF a (Lazy (f b))
 coiterT :: forall f w a. (Functor f, Comonad w) => (w a -> f (w a)) -> w a -> CofreeT f w a
 coiterT psi = CofreeT <<< extend (\w -> CofreeF (extract w) (defer (\_ -> map (coiterT psi) (psi w))))
 
--- | Create a value of type `Cofree f a` from a label and a
+-- | Create a value of type `CofreeF f a b` from a label and a
 -- | functor-full of "subtrees".
 mkCofreeF :: forall f a b. a -> f b -> CofreeF f a b
 mkCofreeF a t = CofreeF a (defer \_ -> t)
