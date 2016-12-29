@@ -16,7 +16,7 @@ import Control.Comonad.Trans.Class (class ComonadTrans)
 
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Tuple (Tuple(..))
-import Data.Functor.Pairing (class Pairing, pair)
+import Data.Functor.Pairing (Pairing)
 
 
 data Day1 f g a x y = Day1 (x -> y -> a) (f x) (g y)
@@ -39,8 +39,16 @@ dap :: forall f. Applicative f => Day f f ~> f
 dap = runDay \get fx gy -> get <$> fx <*> gy
 
 -- | Eliminate a `Day` convolution of two paired functors.
-elimPair :: forall f g a. Pairing f g => Day f g a -> a
-elimPair = runDay pair
+elimPair :: forall f g a. Pairing f g -> Day f g a -> a
+elimPair pair = runDay pair
+
+pairDay :: forall f1 f2 g1 g2. Pairing f1 f2 -> Pairing g1 g2 -> Pairing (Day f1 g1) (Day f2 g2)
+pairDay p1 p2 f day1 day2 =
+  runDay (\g f1 g1 ->
+    runDay (\h f2 g2 ->
+      case p1 Tuple f1 f2, p2 Tuple g1 g2 of
+        Tuple x1 x2, Tuple y1 y2 ->
+          f (g x1 y1) (h x2 y2)) day2) day1
 
 -- | Hoist a natural transformation over the left hand side of a 'Day' convolution.
 hoistDay1 :: forall f g h. (f ~> g) -> Day f h ~> Day g h
@@ -73,11 +81,3 @@ instance comonadDay :: (Comonad f, Comonad g) => Comonad (Day f g) where
 
 instance comonadTrans :: Comonad f => ComonadTrans (Day f) where
   lower = runDay \get fx gy -> get (extract fx) <$> gy
-
-instance pairDay :: (Pairing f1 f2, Pairing g1 g2) => Pairing (Day f1 g1) (Day f2 g2) where
-  pair f d1 d2 =
-    runDay (\g f1 g1 ->
-      runDay (\h f2 g2 ->
-        case pair Tuple f1 f2, pair Tuple g1 g2 of
-          Tuple x1 x2, Tuple y1 y2 ->
-            f (g x1 y1) (h x2 y2)) d2) d1

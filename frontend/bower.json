@@ -10,6 +10,7 @@
   ],
   "dependencies": {
     "purescript-affjax": "^3.0.0",
+    "purescript-affjax": "^3.0.0",
     "purescript-aff-bus": "^1.0.0",
     "purescript-aff-future": "^1.0.0",
     "purescript-argonaut": "^2.0.0",
@@ -20,6 +21,7 @@
     "purescript-fork": "^1.0.0",
     "purescript-halogen": "^0.12.0",
     "purescript-js-timers": "^2.0.0",
+    "purescript-pairing": "^3.0.0",
     "purescript-parallel": "^2.1.0",
     "purescript-validation": "^2.0.0",
     "normalize.css": "3.0.3",

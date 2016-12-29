@@ -6,7 +6,7 @@ import Control.Monad.Aff (Aff, attempt)
 import Control.Monad.Eff.Exception (Error, error)
 
 import Data.Either (Either(..))
-import Data.Functor.Pairing (class Pairing, pair)
+import Data.Functor.Pairing (Pairing)
 import Data.HTTP.Method (Method(..))
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(Tuple))
@@ -15,6 +15,8 @@ import Network.HTTP.Affjax (URL, AffjaxRequest, AffjaxResponse, defaultRequest)
 import Network.HTTP.Affjax as AX
 import Network.HTTP.Affjax.Request (class Requestable)
 import Network.HTTP.Affjax.Response (class Respondable)
+
+import Data.Qyson.Utils (pairArrowTuple)
 
 
 data AffjaxF req res a =
@@ -87,8 +89,8 @@ type CoaffjaxFE req res = CoaffjaxF req res (Either Error (AffjaxResponse res))
 instance functorCoaffjaxF :: Functor (CoaffjaxF req res) where
   map f (CoaffjaxF k) = CoaffjaxF (map (map f) k)
 
-instance pairingAffjaxF :: Pairing (AffjaxF req res) (CoaffjaxF req res) where
-  pair f (AffjaxF req k) (CoaffjaxF h) = pair f k (h req)
+pairAffjaxF :: forall req res. Pairing (AffjaxF req res) (CoaffjaxF req res)
+pairAffjaxF f (AffjaxF req k) (CoaffjaxF h) = pairArrowTuple f k (h req)
 
 coAffjax'
   :: forall eff req res

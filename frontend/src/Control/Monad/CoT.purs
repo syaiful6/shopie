@@ -14,7 +14,7 @@ import Control.Monad.State.Class (class MonadState)
 import Control.Monad.Trans.Class (class MonadTrans, lift)
 import Control.Monad.Writer.Class (class MonadTell)
 
-import Data.Functor.Pairing (class Pairing)
+import Data.Functor.Pairing (Pairing)
 import Data.Identity (Identity(..))
 import Data.Newtype (unwrap)
 import Data.Tuple (Tuple(..))
@@ -38,8 +38,8 @@ lowerCoT m = runCoT m <<< (pure <$ _)
 liftCoT :: forall w m s. Comonad w => (forall a. w a -> s) -> CoT w m s
 liftCoT f = CoT (extract <*> f)
 
-instance pairCoT :: Functor w => Pairing w (CoT w Identity) where
-  pair f w cow = runCo cow (map f w)
+pairCoT :: forall w. Functor w => Pairing w (CoT w Identity)
+pairCoT f w cow = runCo cow (map f w)
 
 instance functorCoT :: Functor w => Functor (CoT w m) where
   map f (CoT cot) = CoT \w -> cot (map (_ <<< f) w)

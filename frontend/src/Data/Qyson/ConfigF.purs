@@ -7,9 +7,9 @@ import Control.Monad.Free (Free, liftF)
 
 import Data.Profunctor (class Profunctor, dimap, rmap)
 import Data.Tuple (Tuple(Tuple))
-import Data.Functor.Pairing (class Pairing, pair)
+import Data.Functor.Pairing (Pairing)
 
-import Data.Qyson.Utils (coiter)
+import Data.Qyson.Utils (coiter, pairArrowTuple)
 
 data ConfigF c a = ConfigF (c -> a)
 
@@ -33,8 +33,8 @@ instance functorCoconfig :: Functor (CoconfigF c) where
 coConfigF :: forall c a. c -> a -> CoconfigF c a
 coConfigF c a = CoconfigF $ Tuple c a
 
-instance pairConfig :: Pairing (ConfigF c) (CoconfigF c) where
-  pair f (ConfigF c) (CoconfigF co) = pair f c co
+pairConfig :: forall c. Pairing (ConfigF c) (CoconfigF c)
+pairConfig f (ConfigF c) (CoconfigF co) = pairArrowTuple f c co
 
 mkCoconfig :: forall c a. c -> a -> Cofree (CoconfigF c) a
 mkCoconfig c = coiter (coConfigF c)

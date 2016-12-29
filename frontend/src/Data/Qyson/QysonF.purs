@@ -7,13 +7,14 @@ module Data.Qyson.QysonF
 import Prelude
 
 import Data.Argonaut.Core (Json)
-import Data.Functor.Pairing (class Pairing, pair)
+import Data.Functor.Pairing (Pairing)
 import Data.Maybe (Maybe)
 
 import Data.Qyson.Error (type (:~>), type (<~:), ResponseQ, ErrorQ(..), UnauthorizedMessage(..),
                          lowerErrorQ, printErrorQ)
 import Data.Qyson.Types (AnyPath, FilePath, DirPath, Pagination(..), Vars)
 
+import Data.Qyson.Utils (pairArrowTuple)
 
 data QysonF a
   = ReadQuery DirPath Vars (Maybe Pagination) (Json :~> a)
@@ -67,9 +68,9 @@ instance functorCoQysonF :: Functor CoqysonF where
 
 type CoqysonFE a = CoqysonF (ResponseQ a)
 
-instance pairQysonF :: Pairing QysonF CoqysonF where
-  pair f (ReadQuery d vp mp k) (CoqysonF rc) = pair f k (rc.readQueryH d vp mp)
-  pair f (ReadFile fp mp k) (CoqysonF rc) = pair f k (rc.readfileH fp mp)
-  pair f (WriteFile fp dc k) (CoqysonF rc) = pair f k (rc.writeFileH fp dc)
-  pair f (AppendFile fp dc k) (CoqysonF rc) = pair f k (rc.appendFileH fp dc)
-  pair f (DeleteFile apt k) (CoqysonF rc) = pair f k (rc.deleteFileH apt)
+pairQysonF :: Pairing QysonF CoqysonF
+pairQysonF f (ReadQuery d vp mp k) (CoqysonF rc) = pairArrowTuple f k (rc.readQueryH d vp mp)
+pairQysonF f (ReadFile fp mp k) (CoqysonF rc) = pairArrowTuple f k (rc.readfileH fp mp)
+pairQysonF f (WriteFile fp dc k) (CoqysonF rc) = pairArrowTuple f k (rc.writeFileH fp dc)
+pairQysonF f (AppendFile fp dc k) (CoqysonF rc) = pairArrowTuple f k (rc.appendFileH fp dc)
+pairQysonF f (DeleteFile apt k) (CoqysonF rc) = pairArrowTuple f k (rc.deleteFileH apt)
