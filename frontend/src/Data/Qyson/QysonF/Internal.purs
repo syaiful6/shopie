@@ -1,4 +1,4 @@
-module Data.Qyson.CoqysonF.Internal where
+module Data.Qyson.QysonF.Internal where
 
 import Prelude
 
@@ -34,7 +34,7 @@ import Data.Qyson.QysonF (ErrorQ(..), UnauthorizedMessage(..), AnyPath, Paginati
 type AXFP = AXF.AffjaxFP RequestContent String
 
 ask :: forall c r. Free (Coproduct (CF.ConfigF c) r) c
-ask = liftF $ left $ CF.configF
+ask = liftF $ left $ CF.configF id
 
 jsonResult :: forall j. Json.DecodeJson j => String -> Either Error j
 jsonResult = lmap error <$> (Json.decodeJson <=< Json.jsonParser)
@@ -66,12 +66,12 @@ mkURL endpoint path params = do
     Nil -> url
     _ -> url <> toQueryString params
   where
-    toQueryString :: List (Tuple String String) -> String
-    toQueryString
-      = ("?" <> _)
-      <<< Str.joinWith "&"
-      <<< List.toUnfoldable
-      <<< map (\(Tuple k v) → k <> "=" <> encodeURIComponent v)
+  toQueryString :: List (Tuple String String) -> String
+  toQueryString
+    = ("?" <> _)
+    <<< Str.joinWith "&"
+    <<< List.toUnfoldable
+    <<< map (\(Tuple k v) → k <> "=" <> encodeURIComponent v)
 
 mkPath :: RelDir Sandboxed -> AnyPath -> String
 mkPath base fsPath

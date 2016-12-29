@@ -38,8 +38,8 @@ lowerCoT m = runCoT m <<< (pure <$ _)
 liftCoT :: forall w m s. Comonad w => (forall a. w a -> s) -> CoT w m s
 liftCoT f = CoT (extract <*> f)
 
-pairCoT :: forall w. Functor w => Pairing w (CoT w Identity)
-pairCoT f w cow = runCo cow (map f w)
+pairCo :: forall w. Functor w => Pairing w (CoT w Identity)
+pairCo f w cow = runCo cow (map f w)
 
 instance functorCoT :: Functor w => Functor (CoT w m) where
   map f (CoT cot) = CoT \w -> cot (map (_ <<< f) w)

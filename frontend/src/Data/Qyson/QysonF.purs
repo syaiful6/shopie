@@ -10,7 +10,7 @@ import Data.Argonaut.Core (Json)
 import Data.Functor.Pairing (Pairing)
 import Data.Maybe (Maybe)
 
-import Data.Qyson.Error (type (:~>), type (<~:), ResponseQ, ErrorQ(..), UnauthorizedMessage(..),
+import Data.Qyson.Error (type (:~>), ResponseQ, ErrorQ(..), UnauthorizedMessage(..),
                          lowerErrorQ, printErrorQ)
 import Data.Qyson.Types (AnyPath, FilePath, DirPath, Pagination(..), Vars)
 
@@ -46,31 +46,3 @@ appendFile fp jp = AppendFile fp jp id
 
 deleteFile :: AnyPath -> QysonFE Unit
 deleteFile apt = DeleteFile apt id
-
-type CoqysonR a =
-  { readQueryH  :: DirPath -> Vars -> Maybe Pagination -> Json <~: a
-  , readfileH   :: FilePath -> Maybe Pagination -> Json <~: a
-  , writeFileH  :: FilePath -> Json -> Unit <~: a
-  , appendFileH :: FilePath -> Json -> Unit <~: a
-  , deleteFileH :: AnyPath -> Unit <~: a
-  }
-
-data CoqysonF a = CoqysonF (CoqysonR a)
-
-instance functorCoQysonF :: Functor CoqysonF where
-  map f (CoqysonF rc) = CoqysonF $
-    { readQueryH: map (map (map (map f))) rc.readQueryH
-    , readfileH: map (map (map f)) rc.readfileH
-    , writeFileH: map (map (map f)) rc.writeFileH
-    , appendFileH: map (map (map f)) rc.appendFileH
-    , deleteFileH: map (map f) rc.deleteFileH
-    }
-
-type CoqysonFE a = CoqysonF (ResponseQ a)
-
-pairQysonF :: Pairing QysonF CoqysonF
-pairQysonF f (ReadQuery d vp mp k) (CoqysonF rc) = pairArrowTuple f k (rc.readQueryH d vp mp)
-pairQysonF f (ReadFile fp mp k) (CoqysonF rc) = pairArrowTuple f k (rc.readfileH fp mp)
-pairQysonF f (WriteFile fp dc k) (CoqysonF rc) = pairArrowTuple f k (rc.writeFileH fp dc)
-pairQysonF f (AppendFile fp dc k) (CoqysonF rc) = pairArrowTuple f k (rc.appendFileH fp dc)
-pairQysonF f (DeleteFile apt k) (CoqysonF rc) = pairArrowTuple f k (rc.deleteFileH apt)

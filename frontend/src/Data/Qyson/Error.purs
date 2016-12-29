@@ -41,7 +41,4 @@ lowerErrorQ = case _ of
 type ResponseQ resp = Either ErrorQ resp
 type ContinuationQ resp next = ResponseQ resp -> next
 
-type CoContinuanQ resp next = Tuple (ResponseQ resp) next
-
 infixr 2 type ContinuationQ as :~>
-infixr 2 type CoContinuanQ as <~:
