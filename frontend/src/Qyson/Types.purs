@@ -1,4 +1,4 @@
-module Data.Qyson.Types where
+module Qyson.Types where
 
 import Prelude
 

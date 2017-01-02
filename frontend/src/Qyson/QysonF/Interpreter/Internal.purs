@@ -1,4 +1,4 @@
-module Data.Qyson.QysonF.Internal where
+module Qyson.QysonF.Interpreter.Internal where
 
 import Prelude
 
@@ -13,6 +13,7 @@ import Data.Either (Either(..), either)
 import Data.Functor.Coproduct (Coproduct, left, right)
 import Data.List (List(..), (:))
 import Data.List as List
+import Data.HTTP.Method (Method(..))
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Path.Pathy (Sandboxed, Rel, Path, Abs, RelDir, file, dir, printPath,
                         rootDir, relativeTo, (</>))
@@ -27,11 +28,14 @@ import Network.HTTP.AffjaxF as AXF
 import Network.HTTP.StatusCode (StatusCode(..))
 import Network.HTTP.ResponseHeader as RH
 
-import Data.Qyson.ConfigF as CF
-import Data.Qyson.QysonF (ErrorQ(..), UnauthorizedMessage(..), AnyPath, Pagination(..))
+import Qyson.ConfigF as CF
+import Qyson.QysonF (ErrorQ(..), UnauthorizedMessage(..), AnyPath, Pagination(..))
 
 
 type AXFP = AXF.AffjaxFP RequestContent String
+
+defaultRequest :: AX.AffjaxRequest RequestContent
+defaultRequest = AX.defaultRequest { content = Nothing }
 
 ask :: forall c r. Free (Coproduct (CF.ConfigF c) r) c
 ask = liftF $ left $ CF.configF id
@@ -53,6 +57,15 @@ toPageParams (Just (Pagination offset limit)) =
   : Nil
   )
 
+getReq :: AX.URL -> AXF.AffjaxF RequestContent String
+getReq u = AXF.affjax (defaultRequest { url = u })
+
+putReq :: AX.URL -> RequestContent -> AXF.AffjaxF RequestContent String
+putReq u c = AXF.affjax (defaultRequest { method = Left PUT, url = u, content = Just c })
+
+deleteReq :: AX.URL -> AXF.AffjaxF RequestContent String
+deleteReq u = AXF.affjax (defaultRequest { method = Left DELETE, url = u })
+
 mkURL
   :: forall r
    . RelDir Sandboxed
@@ -65,13 +78,13 @@ mkURL endpoint path params = do
   pure case params of
     Nil -> url
     _ -> url <> toQueryString params
-  where
-  toQueryString :: List (Tuple String String) -> String
-  toQueryString
-    = ("?" <> _)
-    <<< Str.joinWith "&"
-    <<< List.toUnfoldable
-    <<< map (\(Tuple k v) → k <> "=" <> encodeURIComponent v)
+
+toQueryString :: List (Tuple String String) -> String
+toQueryString
+  = ("?" <> _)
+  <<< Str.joinWith "&"
+  <<< List.toUnfoldable
+  <<< map (\(Tuple k v) → k <> "=" <> encodeURIComponent v)
 
 mkPath :: RelDir Sandboxed -> AnyPath -> String
 mkPath base fsPath

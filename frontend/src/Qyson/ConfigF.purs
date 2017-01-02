@@ -1,4 +1,4 @@
-module Data.Qyson.ConfigF
+module Qyson.ConfigF
   ( ConfigF
   , configF
   , evalReader

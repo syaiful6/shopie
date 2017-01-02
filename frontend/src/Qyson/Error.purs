@@ -1,4 +1,4 @@
-module Data.Qyson.Error where
+module Qyson.Error where
 
 import Prelude
 
