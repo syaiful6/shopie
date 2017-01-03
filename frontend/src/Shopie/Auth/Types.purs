@@ -2,15 +2,11 @@ module Shopie.Auth.Types where
 
 import Shopie.Prelude
 
-import Control.Monad.Eff (Eff)
-import Control.Monad.Free (Free, liftF)
-
 import Data.Argonaut (class EncodeJson, class DecodeJson, decodeJson, encodeJson,
                       jsonEmptyObject, (~>), (:=), (.?))
+
 import DOM (DOM)
 
-import Halogen.Query.EventSource as ES
-import Halogen.Query.HalogenF as HF
 
 -- | UserId, this can be an email or username.
 newtype UserId = UserId String
@@ -99,39 +95,6 @@ instance showAuthResult :: Show AuthResult where
     UserError s -> "(UserError " <> s <> ")"
     ServerError s -> "(ServerError" <> s <> ")"
 
-class AuthDSL m where
-  -- | authenticate a given credentials
-  authenticate :: Creds -> m AuthResult
-  -- | Retrieves user credentials, if user is authenticated.
-  maybeAuthId :: m (Maybe UserId)
-  -- | invalidate the current user. Should be okay calling this multiple times.
-  invalidate :: m AuthResult
-
-instance authDSLMaybeT :: (Monad m, AuthDSL m) => AuthDSL (MaybeT m) where
-  authenticate = lift <<< authenticate
-  maybeAuthId  = lift $ maybeAuthId
-  invalidate   = lift $ invalidate
-
-instance authDSLExceptT :: (Monad m, AuthDSL m) => AuthDSL (ExceptT e m) where
-  authenticate = lift <<< authenticate
-  maybeAuthId  = lift $ maybeAuthId
-  invalidate   = lift $ invalidate
-
-instance authDSLFree :: AuthDSL f => AuthDSL (Free f) where
-  authenticate = liftF <<< authenticate
-  maybeAuthId  = liftF $ maybeAuthId
-  invalidate   = liftF $ invalidate
-
-instance authDSLHalogenF :: AuthDSL g => AuthDSL (HF.HalogenFP ES.EventSource s f g) where
-  authenticate = HF.QueryHF <<< authenticate
-  maybeAuthId  = HF.QueryHF $ maybeAuthId
-  invalidate   = HF.QueryHF $ invalidate
-
-instance authDSLHalogenFP :: AuthDSL g => AuthDSL (HF.HalogenFP ES.ParentEventSource s f (Free (HF.HalogenFP ES.EventSource s' f' g))) where
-  authenticate = HF.QueryHF <<< authenticate
-  maybeAuthId  = HF.QueryHF $ maybeAuthId
-  invalidate   = HF.QueryHF $ invalidate
-
 -- | Oauth2Passwords records
 type Oauth2Passwords =
   { email :: Email
@@ -139,23 +102,18 @@ type Oauth2Passwords =
   , grantType :: GrantType
   }
 
+type Oauth2ClientR =
+  { clientId :: String
+  , clientSecret :: String
+  }
+
 -- | Oauth2Client
-type Oauth2Client =
-  { clientId :: String
-  , clientSecret :: String
-  , endpoint :: String
-  , revokeEndPoint :: String
-  }
+newtype Oauth2Client = Oauth2Client Oauth2ClientR
 
-type ReadClient =
-  { clientId :: String
-  , clientSecret :: String
-  }
-
-readClient :: forall eff. Eff (dom :: DOM | eff) (Maybe ReadClient)
-readClient = _readClient Nothing Just
+readClient :: forall eff. Eff (dom :: DOM | eff) (Maybe Oauth2Client)
+readClient = map Oauth2Client <$> _readClient Nothing Just
 
 foreign import _readClient
   :: forall a eff. Maybe a
   -> (a -> Maybe a)
-  -> Eff (dom :: DOM | eff) (Maybe ReadClient)
+  -> Eff (dom :: DOM | eff) (Maybe Oauth2ClientR)
