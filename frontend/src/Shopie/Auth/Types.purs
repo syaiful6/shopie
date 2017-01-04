@@ -21,6 +21,18 @@ instance encodeJsonUserId :: EncodeJson UserId where
 instance decodeJsonUserId :: DecodeJson UserId where
   decodeJson = map UserId <<< decodeJson
 
+newtype TokenId = TokenId String
+
+derive instance eqTokenId :: Eq TokenId
+derive instance ordTokenId :: Ord TokenId
+derive instance newtypeTokenId :: Newtype TokenId _
+
+instance encodeJsonTokenId :: EncodeJson TokenId where
+  encodeJson = runTokenId >>> encodeJson
+
+instance decodeJsonTokenId :: DecodeJson TokenId where
+  decodeJson = map TokenId <<< decodeJson
+
 -- | Type synonym for single field of oauth2 token
 type AccessToken = String
 type RefreshToken = String
@@ -111,9 +123,9 @@ type Oauth2ClientR =
 newtype Oauth2Client = Oauth2Client Oauth2ClientR
 
 readClient :: forall eff. Eff (dom :: DOM | eff) (Maybe Oauth2Client)
-readClient = map Oauth2Client <$> _readClient Nothing Just
+readClient = _readClient Nothing Just
 
 foreign import _readClient
   :: forall a eff. Maybe a
   -> (a -> Maybe a)
-  -> Eff (dom :: DOM | eff) (Maybe Oauth2ClientR)
+  -> Eff (dom :: DOM | eff) (Maybe Oauth2Client)
