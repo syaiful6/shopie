@@ -40,6 +40,7 @@ eval = case _ of
     k <$> mkRequest jsonResult
       (AXF.affjax $ defaultRequest
         { url = url
+        , method = Left GET
         , headers = [Req.Accept $ jsonMediaType mode]
         })
 
@@ -49,6 +50,7 @@ eval = case _ of
     k <$> mkRequest jsonResult
       (AXF.affjax $ defaultRequest
         { url = url
+        , method = Left PUT
         , headers = catMaybes [ Req.Accept <$> fst reqSettings
                               , Req.ContentType <$> fst reqSettings
                               ]
@@ -60,6 +62,7 @@ eval = case _ of
     k <$> mkRequest jsonResult
       (AXF.affjax $ defaultRequest
         { url = url
+        , method = Left GET
         , headers = [Req.Accept $ jsonMediaType mode]
         })
 

@@ -1,137 +1,106 @@
-module Shopie.ShopieM.ShopieM
-  ( ShopieMoD
-  , ShopieApD
-  , ShopieF(..)
-  , ShopieM(..)
-  , ShopieAp(..)
-  , forgotten
-  , hoistM
-  ) where
+module Shopie.ShopieM.ShopieM where
 
-import Prelude
+import Shopie.Prelude
 
-import Control.Applicative.Free (FreeAp, liftAp, hoistAp)
+import Control.Monad.Aff (Aff)
+import Control.Applicative.Free (FreeAp, liftAp)
 import Control.Monad.Aff.Class (class MonadAff, liftAff)
 import Control.Monad.Eff.Class (class MonadEff, liftEff)
-import Control.Monad.Aff.Free (class Affable, fromAff)
 import Control.Monad.Eff.Exception (Error)
 import Control.Monad.Fork (class MonadFork)
-import Control.Monad.Free (Free, liftF, hoistFree)
-import Control.Monad.Reader.Class (class MonadAsk)
-import Control.Monad.Rec.Class (class MonadRec, tailRecM, Step(..))
-import Control.Monad.Trans.Class (class MonadTrans)
-import Control.Parallel.Class (class Parallel)
+import Control.Monad.Free (Free, liftF)
+import Control.Monad.Rec.Class (tailRecM, Step(..))
 
-import Data.Newtype (class Newtype, over)
+import Qyson.ConfigF as QC
 
-import Shopie.Auth.Types (class AuthDSL, Email)
-import Shopie.Draad (Draad)
-import Shopie.ShopieM.AuthF (AuthF(..))
+import Shopie.Auth.AuthF as AT
+import Shopie.Auth.Types (Email, TokenId)
+import Shopie.Auth.Class (class AuthDSL)
+import Shopie.Effects (ShopieEffects)
 import Shopie.ShopieM.ForkF as SF
-import Shopie.ShopieM.Notification (class NotifyQ, Notification(Notification))
+import Shopie.ShopieM.Notification (class NotifyQ, Notification)
+import Shopie.Wiring (Wiring)
 
 
--- | A type Synonim for ShopieM where the g part is Draad
-type ShopieMoD = ShopieM Draad
-type ShopieApD = ShopieAp Draad
-
--- | Our algebra, it's similiar to ReaderT
-data ShopieF g m a
-  = AuthSF (AuthF a)
-  | Lift (m a)
-  | Notify Notification a
+data ShopieF eff a
+  = Aff (Aff eff a)
   | Halt String a
-  | Par (ShopieAp g m a)
-  | Fork (SF.Fork (ShopieM g m) a)
-  | Ask (g -> a)
+  | Par (ShopieAp eff a)
+  | Notify Notification a
+  | Fork (SF.Fork (ShopieM eff) a)
 
-instance functorShopieF :: Functor m => Functor (ShopieF g m) where
+instance functorShopieF :: Functor (ShopieF eff) where
   map f = case _ of
-    AuthSF s -> AuthSF (map f s)
-    Lift q -> Lift (map f q)
-    Notify n a -> Notify n (f a)
-    Par pa  -> Par (map f pa)
-    Halt msg a -> Halt msg (f a)
+    Aff aff -> Aff (map f aff)
+    Halt s a -> Halt s (f a)
+    Par sa -> Par (map f sa)
     Fork fa -> Fork (map f fa)
-    Ask k -> Ask (f <<< k)
+    Notify n a -> Notify n (f a)
 
-newtype ShopieAp g m a = ShopieAp (FreeAp (ShopieM g m) a)
+type ShopieFC eff = Coproduct (QC.ConfigF Wiring) (Coproduct AT.AuthF (ShopieF eff))
 
-derive instance newtypeShopieAp :: Newtype (ShopieAp g m a) _
-derive newtype instance functorShopieAp :: Functor (ShopieAp g m)
-derive newtype instance applyShopieAp :: Apply (ShopieAp g m)
-derive newtype instance applicativeShopieAp :: Applicative (ShopieAp g m)
+newtype ShopieM eff a = ShopieM (Free (ShopieFC eff) a)
 
-newtype ShopieM g m a = ShopieM (Free (ShopieF g m) a)
+type Shopie = ShopieM (ShopieEffects ())
 
-instance functorShopieM :: Functor (ShopieM g m) where
-  map f (ShopieM fa) = ShopieM (map f fa)
+instance functorShopieM :: Functor (ShopieM eff) where
+  map f (ShopieM fa) = ShopieM $ map f fa
 
-instance applyShopieM :: Apply (ShopieM g m) where
+instance applyShopieM :: Apply (ShopieM eff) where
   apply (ShopieM fa) (ShopieM fb) = ShopieM (apply fa fb)
 
-instance applicativeShopieM :: Applicative (ShopieM g m) where
+instance applicativeShopieM :: Applicative (ShopieM eff) where
   pure a = ShopieM (pure a)
 
-instance bindShopieM :: Bind (ShopieM g m) where
+instance bindShopieM :: Bind (ShopieM eff) where
   bind (ShopieM fa) f = ShopieM (fa >>= \x -> case f x of ShopieM fb -> fb)
 
-instance monadShopieM :: Monad (ShopieM g m)
+instance monadShopieM :: Monad (ShopieM eff)
 
-instance monadEffShopieM :: MonadEff eff m => MonadEff eff (ShopieM g m) where
-  liftEff = ShopieM <<< liftF <<< Lift <<< liftEff
-
-instance monadAffShopieM :: MonadAff eff m => MonadAff eff (ShopieM g m) where
-  liftAff = ShopieM <<< liftF <<< Lift <<< liftAff
-
-instance affableShopieM :: Affable eff m => Affable eff (ShopieM g m) where
-  fromAff = ShopieM <<< liftF <<< Lift <<< fromAff
-
-instance parallelShopieM :: Parallel (ShopieAp g m) (ShopieM g m) where
-  parallel = ShopieAp <<< liftAp
-  sequential = ShopieM <<< liftF <<< Par
-
-instance monadForkShopieM :: MonadAff eff m => MonadFork Error (ShopieM g m) where
-  fork a = map liftAff <$> ShopieM (liftF $ Fork $ SF.fork a)
-
-instance monadTransShopieM :: MonadTrans (ShopieM g) where
-  lift m = ShopieM $ liftF $ Lift m
-
-instance monadRecShopieM :: MonadRec (ShopieM g m) where
+instance monadRecShopieM :: MonadRec (ShopieM eff) where
   tailRecM k a = k a >>= go
     where
     go (Loop x) = tailRecM k x
     go (Done y) = pure y
 
-instance monadAskShopieM :: MonadAsk g (ShopieM g m) where
-  ask = ShopieM $ liftF $ Ask id
+instance monadEffShopieM :: MonadEff eff (ShopieM eff) where
+  liftEff = ShopieM <<< liftF <<< right <<< right <<< Aff <<< liftEff
 
-instance notifyQShopieM :: NotifyQ (ShopieM g m) where
-  notify (Notification n) = ShopieM $ liftF $ Notify (Notification n) unit
+instance monadAffShopieM :: MonadAff eff (ShopieM eff) where
+  liftAff = ShopieM <<< liftF <<< right <<< right <<< Aff <<< liftAff
 
-instance authDSLShopieM :: AuthDSL (ShopieM g m) where
-  authenticate = ShopieM <<< liftF <<< AuthSF <<< flip Authenticate id
-  maybeAuthId = ShopieM $ liftF $ AuthSF $ MaybeAuthId id
-  invalidate = ShopieM $ liftF $ AuthSF $ Invalidate id
+instance affableShopieM :: Affable eff (ShopieM eff) where
+  fromAff = ShopieM <<< liftF <<< right <<< right <<< Aff
 
-forgotten :: forall g m. Email -> ShopieM g m Unit
-forgotten em = ShopieM $ liftF $ AuthSF $ Forgotten em unit
+instance parallelShopieM :: Parallel (ShopieAp eff) (ShopieM eff) where
+  parallel = ShopieAp <<< liftAp
+  sequential = ShopieM <<< liftF <<< right <<< right <<< Par
 
--- | Change the `m` part of ShopieM
-hoistM
-  :: forall g m m'
-   . Functor m'
-  => (m ~> m')
-  -> ShopieM g m
-  ~> ShopieM g m'
-hoistM nat (ShopieM fa) = ShopieM (hoistFree go fa)
-  where
-  go :: ShopieF g m ~> ShopieF g m'
-  go = case _ of
-    AuthSF k -> AuthSF k
-    Lift q -> Lift (nat q)
-    Notify n a -> Notify n a
-    Halt msg a -> Halt msg a
-    Par p -> Par (over ShopieAp (hoistAp (hoistM nat)) p)
-    Fork f -> Fork (SF.hoistFork (hoistM nat) f)
-    Ask f -> Ask f
+instance monadForkShopieM :: MonadAff eff m => MonadFork Error (ShopieM eff) where
+  fork a = map liftAff <$> ShopieM (liftF $ right $ right $ Fork $ SF.fork a)
+
+instance monadAskShopieM :: MonadAsk Wiring (ShopieM eff) where
+  ask = ShopieM $ liftF $ left $ QC.configF id
+
+instance notifyQShopieM :: NotifyQ (ShopieM eff) where
+  notify = ShopieM <<< liftF <<< right <<< right <<< flip Notify unit
+
+instance authDSLShopieM :: AuthDSL (ShopieM eff) where
+  authenticate = ShopieM <<< liftF <<< right <<< left <<< AT.authenticateF
+  maybeAuthId = ShopieM $ liftF $ right $ left $ AT.maybeAuthIdF
+  invalidate = ShopieM $ liftF $ right $ left $ AT.invalidateF
+
+newtype ShopieAp eff a = ShopieAp (FreeAp (ShopieM eff) a)
+
+derive newtype instance functorShopieAp :: Functor (ShopieAp eff)
+derive newtype instance applyShopieAp :: Apply (ShopieAp eff)
+derive newtype instance applicativeShopieAp :: Applicative (ShopieAp eff)
+
+unShopieM :: forall eff. ShopieM eff ~> Free (ShopieFC eff)
+unShopieM (ShopieM m) = m
+
+forgotten :: forall eff. Email -> ShopieM eff Unit
+forgotten = ShopieM <<< liftF <<< right <<< left <<< AT.forgottenF
+
+getAuthTokenId :: forall eff. ShopieM eff (Maybe TokenId)
+getAuthTokenId = ShopieM $ liftF $ right $ left $ AT.getAuthTokenId

@@ -12,7 +12,7 @@ import Halogen.HTML.Properties.Indexed as HP
 import Halogen.HTML.Events.Indexed as HE
 import Halogen.HTML.Events.Handler as HEH
 
-import Shopie.ShopieM (ShopieEffects, ShopieMoD)
+import Shopie.ShopieM (Shopie)
 import Shopie.User.Model (User, UserAttributes, user, unAttr)
 import Shopie.Validation as SV
 
@@ -36,10 +36,7 @@ type Profile =
   }
 
 -- | Profile component
-profile
-  :: forall g e
-   . (Affable (ShopieEffects e) g)
-  => H.Component Profile ProfileQ (ShopieMoD g)
+profile :: H.Component Profile ProfileQ Shopie
 profile = H.component { render, eval }
 
 render :: Profile -> H.ComponentHTML ProfileQ
@@ -50,11 +47,7 @@ render u =
     , renderForm u
     ]
 
-eval
-  :: forall g e
-   . (Affable (ShopieEffects e) g)
-  => ProfileQ
-  ~> H.ComponentDSL Profile ProfileQ (ShopieMoD g)
+eval :: ProfileQ ~> H.ComponentDSL Profile ProfileQ Shopie
 eval (UpdateFirstName fn next) =
   let v = either SV.unionError (SV.deleteError "FirstName") $ runErrors $ SV.nes "FirstName" fn
   in H.modify (v >>> (_ { firstName = fn })) $> next

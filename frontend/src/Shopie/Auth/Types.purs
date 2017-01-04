@@ -2,6 +2,8 @@ module Shopie.Auth.Types where
 
 import Shopie.Prelude
 
+import Control.Monad.Eff (Eff)
+
 import Data.Argonaut (class EncodeJson, class DecodeJson, decodeJson, encodeJson,
                       jsonEmptyObject, (~>), (:=), (.?))
 
@@ -28,7 +30,7 @@ derive instance ordTokenId :: Ord TokenId
 derive instance newtypeTokenId :: Newtype TokenId _
 
 instance encodeJsonTokenId :: EncodeJson TokenId where
-  encodeJson = runTokenId >>> encodeJson
+  encodeJson = unwrap >>> encodeJson
 
 instance decodeJsonTokenId :: DecodeJson TokenId where
   decodeJson = map TokenId <<< decodeJson

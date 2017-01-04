@@ -1,13 +1,11 @@
 module Shopie.ShopieM
   ( module Shopie.Effects
-  , module Shopie.ShopieM.AuthF
   , module Shopie.ShopieM.Notification
   , module Shopie.ShopieM.ShopieM
-  , module Shopie.Draad
+  , module Shopie.Wiring
   ) where
 
-import Shopie.Draad (Draad(..), makeDraad)
 import Shopie.Effects (ShopieEffects)
-import Shopie.ShopieM.ShopieM (ShopieM(..), ShopieF(..), ShopieMoD, ShopieAp(..), forgotten, hoistM)
-import Shopie.ShopieM.AuthF (AuthF(..), AuthMessage(..))
-import Shopie.ShopieM.Notification (class NotifyQ, notify, info, error, warning)
+import Shopie.ShopieM.ShopieM (ShopieM(..), ShopieF(..), Shopie, forgotten)
+import Shopie.ShopieM.Notification (class NotifyQ, notify, notifyInfo, notifyError, notifyWarning)
+import Shopie.Wiring (Wiring(..), makeWiring)

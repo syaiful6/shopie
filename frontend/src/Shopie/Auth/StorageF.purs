@@ -15,7 +15,7 @@ instance functorStorageF :: Functor StorageF where
   map f (Restore s k) = Restore s (f <<< k)
   map f (Remove s a) = Remove s (f a)
 
-persist :: String -> StorageF Unit
+persist :: String -> String -> StorageF Unit
 persist k v = Persist k v unit
 
 restore :: String -> StorageF (Maybe String)

@@ -18,7 +18,7 @@ import Math as Math
 
 import Shopie.Halogen.EventSource (raise')
 import Shopie.Notification.Item (notification, NotifQuery(..), NotificationItem)
-import Shopie.ShopieM (Draad(..), ShopieEffects, ShopieMoD)
+import Shopie.ShopieM (Shopie, Wiring(..))
 import Shopie.ShopieM.Notification as QN
 
 
@@ -49,10 +49,10 @@ derive instance eqNotifSlot :: Eq NotifSlot
 derive instance ordNotifSlot :: Ord NotifSlot
 
 -- | Synonim to make typing more readable
-type StateP g = H.ParentState NotifList NotificationItem ListQuery NotifQuery (ShopieMoD g) NotifSlot
+type StateP = H.ParentState NotifList NotificationItem ListQuery NotifQuery Shopie NotifSlot
 type QueryP = Coproduct ListQuery (H.ChildF NotifSlot NotifQuery)
-type NotifListDSL g = H.ParentDSL NotifList NotificationItem ListQuery NotifQuery (ShopieMoD g) NotifSlot
-type NotifListHTML g = H.ParentHTML NotificationItem ListQuery NotifQuery (ShopieMoD g) NotifSlot
+type NotifListDSL = H.ParentDSL NotifList NotificationItem ListQuery NotifQuery Shopie NotifSlot
+type NotifListHTML = H.ParentHTML NotificationItem ListQuery NotifQuery Shopie NotifSlot
 
 mkNotif :: QN.Level -> Message -> NotificationItem
 mkNotif lvl msg =
@@ -61,10 +61,7 @@ mkNotif lvl msg =
   , removed: false
   }
 
-list
-  :: forall g eff
-  .  (Affable (ShopieEffects eff) g)
-  => H.Component (StateP g) QueryP (ShopieMoD g)
+list :: H.Component StateP QueryP Shopie
 list =
   H.lifecycleParentComponent
     { render
@@ -74,28 +71,28 @@ list =
     , finalizer: Nothing
     }
 
-render :: forall g. NotifList -> NotifListHTML g
+render :: NotifList -> NotifListHTML
 render st =
   HH.div
     [ HP.class_ $ HH.className "sh-notifications" ]
     (foldMap renderMessage st.notifications)
 
-renderMessage :: forall g. Notify -> Array (NotifListHTML g)
+renderMessage :: Notify -> Array NotifListHTML
 renderMessage t =
   [ HH.slot (NotifSlot $ get1 t) \_ ->
     { component: notification, initialState: get2 t `mkNotif` get3 t }
   ]
 
-eval :: forall g eff. (Affable (ShopieEffects eff) g) => ListQuery ~> NotifListDSL g
+eval :: ListQuery ~> NotifListDSL
 eval (Init next) = do
-  Draad { notify } <- H.liftH $ H.liftH ask
+  Wiring { notify } <- H.liftH $ H.liftH ask
   forever (raise' <<< H.action <<< Push =<< H.fromAff (Bus.read notify))
 eval (Push (QN.Notification n) next) = do
   nextId <- H.gets (_.nextId) <* H.modify (addNotification n.level n.message)
   n.timeout `maybeRemoveLater` nextId $> next
 eval (RemoveAll next) = H.queryAll (H.action (ToggleRemoved true)) $> next
 
-peek:: forall g a. H.ChildF NotifSlot NotifQuery a -> NotifListDSL g Unit
+peek:: forall a. H.ChildF NotifSlot NotifQuery a -> NotifListDSL Unit
 peek (H.ChildF p q) = case q of
   Remove _ ->
     H.modify (removeMessage p)
@@ -111,15 +108,10 @@ removeMessage :: NotifSlot -> NotifList -> NotifList
 removeMessage (NotifSlot t) st =
   st { notifications = M.delete t st.notifications }
 
-maybeRemoveLater
-  :: forall g eff
-   . (Affable (ShopieEffects eff) g)
-  => Maybe Milliseconds
-  -> NotifId
-  -> NotifListDSL g Unit
+maybeRemoveLater :: Maybe Milliseconds -> NotifId -> NotifListDSL Unit
 maybeRemoveLater mm nid = maybe (pure unit) raiseNotification mm
   where
-    raiseNotification :: Milliseconds -> NotifListDSL g Unit
+    raiseNotification :: Milliseconds -> NotifListDSL Unit
     raiseNotification (Milliseconds ms) =
       let defer = H.fromAff $ later' (Int.floor $ Math.max ms zero) (pure unit)
       in defer *> H.modify (removeMessage (NotifSlot nid))

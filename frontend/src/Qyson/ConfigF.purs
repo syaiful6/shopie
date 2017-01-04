@@ -3,6 +3,7 @@ module Qyson.ConfigF
   , configF
   , evalReader
   , evalState
+  , evalAp
   ) where
 
 import Prelude
@@ -26,6 +27,9 @@ instance functorConfigF :: Functor (ConfigF c) where
 
 evalReader :: forall c m. MonadReader c m => ConfigF c ~> m
 evalReader (ConfigF k) = k <$> ask
+
+evalAp :: forall f c a. Applicative f => ConfigF c a -> c -> f a
+evalAp (ConfigF k) c = pure (k c)
 
 evalState :: forall c m. MonadState c m => ConfigF c ~> m
 evalState (ConfigF k) = gets k

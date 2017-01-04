@@ -7,12 +7,12 @@ import Control.Monad.Free (Free, liftF)
 import Halogen.Query.EventSource as ES
 import Halogen.Query.HalogenF as HF
 
-import Shopie.Auth.Types (UserId, AuthResult)
+import Shopie.Auth.Types (UserId, AuthResult, Creds)
 
 
 class AuthDSL m where
   -- | authenticate a given credentials
-  authenticate :: Creds -> m AuthMessage
+  authenticate :: Creds -> m AuthResult
   -- | Retrieves user credentials, if user is authenticated.
   maybeAuthId :: m (Maybe UserId)
   -- | invalidate the current user. Should be okay calling this multiple times.

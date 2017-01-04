@@ -3,9 +3,9 @@ module Shopie.ShopieM.Notification
   , Notification(..)
   , class NotifyQ
   , notify
-  , info
-  , error
-  , warning
+  , notifyInfo
+  , notifyError
+  , notifyWarning
   ) where
 
 import Shopie.Prelude
@@ -55,11 +55,11 @@ instance notifyQHalogenF :: NotifyQ g => NotifyQ (HF.HalogenFP ES.EventSource s 
 instance notifyQHalogenFP :: NotifyQ g => NotifyQ (HF.HalogenFP ES.ParentEventSource s f (Free (HF.HalogenFP ES.EventSource s' f' g))) where
   notify = HF.QueryHF <<< notify
 
-info :: forall m. NotifyQ m => String -> Maybe Milliseconds -> m Unit
-info m t = notify $ Notification { level: Info, message: m, timeout: t }
+notifyInfo :: forall m. NotifyQ m => String -> Maybe Milliseconds -> m Unit
+notifyInfo m t = notify $ Notification { level: Info, message: m, timeout: t }
 
-error :: forall m. NotifyQ m => String -> Maybe Milliseconds -> m Unit
-error m t = notify $ Notification { level: Error, message: m, timeout: t }
+notifyError :: forall m. NotifyQ m => String -> Maybe Milliseconds -> m Unit
+notifyError m t = notify $ Notification { level: Error, message: m, timeout: t }
 
-warning :: forall m. NotifyQ m => String -> Maybe Milliseconds -> m Unit
-warning m t = notify $ Notification $ { level: Warning, message: m, timeout: t }
+notifyWarning :: forall m. NotifyQ m => String -> Maybe Milliseconds -> m Unit
+notifyWarning m t = notify $ Notification $ { level: Warning, message: m, timeout: t }

@@ -14,14 +14,14 @@ import Halogen.HTML.Indexed as HH
 import Halogen.HTML.Properties.Indexed as HP
 import Halogen.HTML.Events.Indexed as HE
 
-import Shopie.Auth.Types (AuthResult(..), Email, Passwords, authenticate, passwordCreds)
+import Shopie.Auth.Types (AuthResult(..), Email, Passwords, passwordCreds)
+import Shopie.Auth.Class (authenticate)
 import Shopie.Button.Spinner (SpinnerS, SpinnerQuery(..), SpinnerSlot(..),
                               spinner, mkSpinner)
-import Shopie.ShopieM (class NotifyQ, AuthMessage(..), Draad(..), ShopieEffects, ShopieMoD,
-                       error, forgotten, info)
+import Shopie.ShopieM (class NotifyQ, Shopie, Wiring(..), notifyError, forgotten, notifyInfo)
 import Shopie.Utils.Error (recoverM, censorMF)
 import Shopie.Validation as SV
-
+import Shopie.Auth.AuthF.Interpreter.Wiring (ForgotMessage(..))
 
 data LoginQuery a
   = UpdateEmail Email a
@@ -46,26 +46,23 @@ initialState =
   }
 
 -- | Synonim for ParentState used here
-type LoginSP g = H.ParentState LoginState SpinnerS LoginQuery SpinnerQuery (ShopieMoD g) SpinnerSlot
+type LoginSP = H.ParentState LoginState SpinnerS LoginQuery SpinnerQuery Shopie SpinnerSlot
 
 -- | Synonim for Component Query used here
 type LoginQP = Coproduct LoginQuery (H.ChildF SpinnerSlot SpinnerQuery)
 
 -- | Synonim for our Component DSL
-type LoginDSL g = H.ParentDSL LoginState SpinnerS LoginQuery SpinnerQuery (ShopieMoD g) SpinnerSlot
+type LoginDSL = H.ParentDSL LoginState SpinnerS LoginQuery SpinnerQuery Shopie SpinnerSlot
 
 -- | Our HTML output
-type LoginHTML g = H.ParentHTML SpinnerS LoginQuery SpinnerQuery (ShopieMoD g) SpinnerSlot
+type LoginHTML = H.ParentHTML SpinnerS LoginQuery SpinnerQuery Shopie SpinnerSlot
 
 -- | login Component
-authLogin
-  :: forall g e
-  .  (Affable (ShopieEffects e) g)
-  => H.Component (LoginSP g) LoginQP (ShopieMoD g)
+authLogin :: H.Component LoginSP LoginQP Shopie
 authLogin = H.parentComponent { render, eval, peek: Just peek }
 
 -- | The Component render function
-render :: forall g. LoginState -> LoginHTML g
+render :: LoginState -> LoginHTML
 render st = wrapper st.errors $ loginForm st
 
 -- | The wrapper HTML, used so we don't nested the declaration of actual login
@@ -90,7 +87,7 @@ wrapper m html =
     renderError (Tuple l msg) = HH.li_ [ HH.text $ l <> ": " <> msg ]
 
 -- | The actual HTML that produce our query algebra
-loginForm :: forall g. LoginState -> LoginHTML g
+loginForm :: LoginState -> LoginHTML
 loginForm st =
   HH.div
     [ HP.id_ "login"
@@ -127,7 +124,7 @@ loginForm st =
     ]
 
 -- | Render spinner button component.
-renderSpinner :: forall g. String -> String -> String -> LoginHTML g
+renderSpinner :: String -> String -> String -> LoginHTML
 renderSpinner sl text c =
   HH.slot (SpinnerSlot sl) \_ ->
     { component: spinner, initialState: text `mkSpinner` c }
@@ -136,7 +133,7 @@ renderSpinner sl text c =
 existE :: forall k v. Ord k => k -> M.Map k v -> String
 existE k m = maybe "" (const " error") $ M.lookup k m
 
-eval :: forall g. LoginQuery ~> LoginDSL g
+eval :: LoginQuery ~> LoginDSL
 eval (UpdateEmail em n) =
   let upd = either SV.unionError (SV.deleteError "Email") (runErrors $ SV.email "Email" em)
   in H.modify (upd >>> (_ { email = Just em })) $> n
@@ -144,11 +141,7 @@ eval (UpdatePasswords p n) =
   let upd = either SV.unionError (SV.deleteError "Passwords") (runErrors $ SV.nes "Passwords" p)
   in H.modify (upd >>> (_ { passwords = Just p})) $> n
 
-peek
-  :: forall g a e
-  .  (Affable (ShopieEffects e) g)
-  => H.ChildF SpinnerSlot SpinnerQuery a
-  -> LoginDSL g Unit
+peek :: forall a. H.ChildF SpinnerSlot SpinnerQuery a -> LoginDSL Unit
 peek (H.ChildF p q) = case q, p of
   Submit _, SpinnerSlot "spinner-f" ->
     censorMF (runMaybeT handleForgotP) $ do
@@ -163,7 +156,7 @@ peek (H.ChildF p q) = case q, p of
     pure unit
 
 -- Handle forgotten passwords button
-handleForgotP :: forall g e. (Affable (ShopieEffects e) g) => MaybeT (LoginDSL g) Unit
+handleForgotP :: MaybeT LoginDSL Unit
 handleForgotP = do
   em' <- MaybeT $ H.gets(_.email)
   let v = runErrors $ SV.email "Email" em'
@@ -171,20 +164,15 @@ handleForgotP = do
   -- make sure our validation success
   guard (isRight v)
   lift $ H.liftH $ H.liftH $ forgotten em'
-  Draad { auth } <- lift $ H.liftH $ H.liftH ask
+  Wiring { auth } <- lift $ H.liftH $ H.liftH ask
   -- race the result with default timeout, so we can recover the spinner
   res <- H.fromAff $ sequential $
-    (parallel $ Bus.read auth) <|> (parallel $ later' 10000 (pure ForgotRequestFailure))
-  guard (res == ForgotRequestSuccess)
+    (parallel $ Bus.read auth.forgotBus) <|> (parallel $ later' 10000 (pure ForgotFailure))
+  guard (res == ForgotFailure)
   lift $ H.modify (_ { email = Nothing, passwords = Nothing })
   infoN ("Email sent! Check your inbox in " <> em') 10000.00
 
-handleLogin
-  :: forall g e
-   . (Affable (ShopieEffects e) g)
-  => Email
-  -> Passwords
-  -> ExceptT FieldError (LoginDSL g) Unit
+handleLogin :: Email -> Passwords -> ExceptT FieldError LoginDSL Unit
 handleLogin em psw = do
   v <- except $ runErrors $ loginStateV em psw
   lift $ H.set v
@@ -200,7 +188,7 @@ loginStateV e p = mkLogin <$> SV.email "Email" e <*> SV.nes "Passwords" p
     mkLogin em ps = { email: Just em, passwords: Just ps, errors: M.empty }
 
 infoN :: forall g. NotifyQ g => String -> Number -> g Unit
-infoN msg n = info msg $ Just (Milliseconds n)
+infoN msg n = notifyInfo msg $ Just (Milliseconds n)
 
 errorN :: forall g. NotifyQ g => String -> Number -> g Unit
-errorN msg n = error msg $ Just (Milliseconds n)
+errorN msg n = notifyError msg $ Just (Milliseconds n)

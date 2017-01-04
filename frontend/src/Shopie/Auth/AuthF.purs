@@ -4,7 +4,7 @@ import Prelude
 
 import Data.Maybe (Maybe)
 
-import Shopie.Auth.Types (AuthResult, Creds, Email, UserId, BearerToken)
+import Shopie.Auth.Types (AuthResult, Creds, Email, UserId, TokenId)
 
 
 data AuthF a
