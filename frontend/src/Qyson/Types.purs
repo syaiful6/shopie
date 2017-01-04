@@ -2,10 +2,6 @@ module Qyson.Types where
 
 import Prelude
 
-import Prelude
-
-import Control.Alt ((<|>))
-
 import Data.Either (Either(..))
 import Data.Maybe (maybe)
 import Data.Path.Pathy (AbsPath, AbsFile, AbsDir, Sandboxed, (</>))

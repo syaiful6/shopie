@@ -4,7 +4,6 @@ import Prelude
 
 import Data.Either (Either)
 import Data.Maybe (Maybe(Just, Nothing))
-import Data.Tuple (Tuple)
 import Control.Monad.Eff.Exception (Error, error, message)
 
 
