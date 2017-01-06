@@ -1,5 +1,5 @@
 module Shopie.User.Model
-  ( UserRecord
+  ( UserR
   , User
   , UserAttributes
   , user
@@ -35,7 +35,7 @@ import Network.JsonApi.Resource (Resource(..), class ResourceAble, mkResource)
 newtype User a = User (Tuple (Maybe String) a)
 
 -- | create an user with `a` is UserAttributes
-user :: Maybe String -> UserRecord -> User UserAttributes
+user :: Maybe String -> UserR -> User UserAttributes
 user m attr = User $ Tuple m (UserAttributes attr)
 
 -- | create an user with `a` can be anything
@@ -50,7 +50,7 @@ userLink u =
   in
     (\x -> "/users/" <> x) <$> ident.ident
 
-unAttr :: UserAttributes -> UserRecord
+unAttr :: UserAttributes -> UserR
 unAttr = case _ of UserAttributes a -> a
 
 _user :: forall a b. Lens (User a) (User b) (Tuple (Maybe String) a) (Tuple (Maybe String) b)
@@ -62,7 +62,7 @@ _uid = _user <<< _1
 _attr :: forall a b. Lens (User a) (User b) a b
 _attr = _user <<< _2
 
-_userR :: Lens' UserAttributes UserRecord
+_userR :: Lens' UserAttributes UserR
 _userR = _Newtype
 
 _firstName :: forall a r. Lens' { firstName :: a | r} a
@@ -104,7 +104,7 @@ instance resourceAbleUser :: ResourceAble User where
       mkResource (identifier u) (snd $ unwrap u) links Nothing
 
 -- | A basic record for User
-type UserRecord =
+type UserR =
   { firstName :: String
   , lastName :: String
   , username :: String

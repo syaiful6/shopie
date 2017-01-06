@@ -12,10 +12,10 @@ import Data.Tuple (fst, snd)
 import Network.JsonApi.Resource (toResource)
 import Network.JsonApi.Document (mkDocument)
 
-import Shopie.User.Model (User, UserAttributes, user)
-import Shopie.Validation.Validation (runValidation)
+import Shopie.User.Model (User, UserR, UserAttributes, user)
+import Shopie.Validation.Validation (runV)
 
-import Test.Validation (userV)
+import Test.Validation (userV, userV')
 
 isaac :: User UserAttributes
 isaac =
@@ -44,6 +44,22 @@ anonym =
     , email: ""
     }
 
+invalidUserR :: UserR
+invalidUserR =
+  { firstName: ""
+  , lastName: "foo"
+  , username: "bar"
+  , email: "invalid"
+  }
+
+validUserR :: UserR
+validUserR =
+  { firstName: "first"
+  , lastName: "foo"
+  , username: "bar"
+  , email: "valid@domain.com"
+  }
+
 main :: forall e. Eff (console :: CONSOLE | e) Unit
 main = do
   log "create resource"
@@ -55,12 +71,22 @@ main = do
   log "create collections"
   logShow $ encodeJson $ mkDocument Nothing Nothing [isaac, neil]
 
-  log "run validation"
-  v <- runValidation (userV "Hi" "there" "first" "valid@email.com") anonym
-  logShow $ encodeJson $ toResource $ fst v
-  logShow $ snd v
+  log "run validation: the error result should collect all error"
+  iv <- runV (userV invalidUserR) anonym
+  logShow $ encodeJson $ toResource $ snd iv
+  logShow $ fst iv
 
-  log "run validation"
-  v <- runValidation (userV "" "" "first" "invalidEmail") anonym
-  logShow $ encodeJson $ toResource $ fst v
-  logShow $ snd v
+  log "run validation: the error result should empty"
+  v <- runV (userV validUserR) anonym
+  logShow $ encodeJson $ toResource $ snd v
+  logShow $ fst v
+
+  log "run validation directly on the data structure (invalid)"
+  ix <- runV userV' (user Nothing invalidUserR)
+  logShow $ encodeJson $ toResource $ snd ix
+  logShow $ fst ix
+
+  log "run validation directly on the data structure (valid)"
+  r <- runV userV' (user Nothing validUserR)
+  logShow $ encodeJson $ toResource $ snd r
+  logShow $ fst r
