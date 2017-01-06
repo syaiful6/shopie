@@ -7,15 +7,14 @@ import Control.Monad.Eff.Console (CONSOLE, log, logShow)
 import Data.Argonaut (encodeJson)
 import Data.List as L
 import Data.Maybe (Maybe(..))
-import Data.Tuple (fst, snd)
 
 import Network.JsonApi.Resource (toResource)
 import Network.JsonApi.Document (mkDocument)
 
 import Shopie.User.Model (User, UserR, UserAttributes, user)
-import Shopie.Validation.Validation (runV)
+import Shopie.Validation.Validation (censorV)
 
-import Test.Validation (userV, userV')
+import Test.Shopie.Validation (userV, userV')
 
 isaac :: User UserAttributes
 isaac =
@@ -72,21 +71,17 @@ main = do
   logShow $ encodeJson $ mkDocument Nothing Nothing [isaac, neil]
 
   log "run validation: the error result should collect all error"
-  iv <- runV (userV invalidUserR) anonym
-  logShow $ encodeJson $ toResource $ snd iv
-  logShow $ fst iv
+  iv <- censorV (userV invalidUserR) anonym
+  logShow $ encodeJson <<< toResource <$> iv
 
   log "run validation: the error result should empty"
-  v <- runV (userV validUserR) anonym
-  logShow $ encodeJson $ toResource $ snd v
-  logShow $ fst v
+  v <- censorV (userV validUserR) anonym
+  logShow $ encodeJson <<< toResource <$> v
 
   log "run validation directly on the data structure (invalid)"
-  ix <- runV userV' (user Nothing invalidUserR)
-  logShow $ encodeJson $ toResource $ snd ix
-  logShow $ fst ix
+  ix <- censorV userV' (user Nothing invalidUserR)
+  logShow $ encodeJson <<< toResource <$> ix
 
   log "run validation directly on the data structure (valid)"
-  r <- runV userV' (user Nothing validUserR)
-  logShow $ encodeJson $ toResource $ snd r
-  logShow $ fst r
+  r <- censorV userV' (user Nothing validUserR)
+  logShow $ encodeJson <<< toResource <$> r

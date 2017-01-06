@@ -31,16 +31,17 @@ makeWiring
   => AX.URL
   -> Oauth2Client
   -> m Wiring
-makeWiring basePath oc = fromAff do
-  auth <- ({ basePath: basePath
-           , client: oc
-           , signinBus: _
-           , forgotBus: _
-           }) <$> Bus.make
-              <*> Bus.make
-  ({ auth: auth
-   , notify: _
-   , route: _
-   }) <$> Bus.make
-      <*> Bus.make
-      <#> Wiring
+makeWiring basePath oc = fromAff $
+  { auth: _
+  , notify: _
+  , route: _
+  }
+  <$> ({ basePath: basePath
+       , client: oc
+       , signinBus: _
+       , forgotBus: _
+       } <$> Bus.make
+         <*> Bus.make)
+  <*> Bus.make
+  <*> Bus.make
+  <#> Wiring

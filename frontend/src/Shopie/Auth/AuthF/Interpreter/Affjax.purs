@@ -20,6 +20,7 @@ import Data.DateTime.Instant (unInstant)
 import Network.HTTP.Affjax.Request (RequestContent, toRequest)
 import Network.HTTP.AffjaxF as AXF
 import Data.HTTP.Method (Method(..))
+import Data.MediaType.Common (applicationJSON, applicationFormURLEncoded)
 import Network.HTTP.RequestHeader (RequestHeader(..))
 
 import Data.Array (catMaybes)
@@ -56,9 +57,9 @@ eval = case _ of
       (AXF.affjax $ AI.defaultRequest
         { url = basePath <> "/o/token/"
         , method = Left POST
-        , headers = catMaybes $ [ Accept <$> fst reqSettings
-                                , ContentType <$> fst reqSettings
-                                ]
+        , headers = [ Accept applicationJSON
+                    , ContentType applicationFormURLEncoded
+                    ]
         , content = Just $ snd reqSettings
         })
     case res of

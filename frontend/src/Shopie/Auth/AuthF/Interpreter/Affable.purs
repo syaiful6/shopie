@@ -5,7 +5,7 @@ module Shopie.Auth.AuthF.Interpreter.Affable
 
 import Prelude
 
-import Control.Applicative.Lift (Lift(..))
+import Control.Applicative.Lift (unlift)
 
 import Control.Monad.Aff.Free (class Affable, fromAff)
 import Control.Monad.Free (foldFree)
@@ -39,11 +39,7 @@ eval =
     QF.evalReader
     (coproduct
       (fromAff <<< AXF.eval)
-      (coproduct SIA.eval runLift)
+      (coproduct SIA.eval unlift)
     )
   )
   <<< AIA.eval
-
-runLift :: forall f. Applicative f => Lift f ~> f
-runLift (Lifted f) = f
-runLift (Pure a) = pure a

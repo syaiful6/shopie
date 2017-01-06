@@ -116,20 +116,20 @@ handleResponse { status: StatusCode code, response, headers }
   | otherwise = Left $ error ("unknown error, response returned with code " <> show code)
 
 authenticateBody :: Oauth2Client -> Creds -> DataQ
-authenticateBody (Oauth2Client client) (Creds creds) =
-  urlEncoded $ [ Tuple "username" creds.email
-               , Tuple "password" creds.passwords
+authenticateBody (Oauth2Client { clientId, clientSecret}) (Creds { email, passwords }) =
+  urlEncoded $ [ Tuple "username" email
+               , Tuple "password" passwords
                , Tuple "grant_type" (Just "password")
-               , Tuple "client_id" (Just client.clientId)
-               , Tuple "client_secret" (Just client.clientSecret)
+               , Tuple "client_id" (Just clientId)
+               , Tuple "client_secret" (Just clientSecret)
                ]
 
 refreshTokenBody :: Oauth2Client -> BearerToken -> DataQ
-refreshTokenBody (Oauth2Client oa) (BearerToken tok) =
+refreshTokenBody (Oauth2Client { clientId, clientSecret}) (BearerToken { refreshToken }) =
   urlEncoded $ [ Tuple "grant_type" (Just "refresh_token")
-               , Tuple "refresh_token" (Just tok.refreshToken)
-               , Tuple "client_id" (Just oa.clientId)
-               , Tuple "client_secret" (Just oa.clientSecret)
+               , Tuple "refresh_token" (Just refreshToken)
+               , Tuple "client_id" (Just clientId)
+               , Tuple "client_secret" (Just clientSecret)
                ]
 
 normalizeExpiration :: BearerToken -> BearerToken

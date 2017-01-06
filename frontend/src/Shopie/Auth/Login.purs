@@ -168,7 +168,7 @@ handleForgotP = do
   -- race the result with default timeout, so we can recover the spinner
   res <- H.fromAff $ sequential $
     (parallel $ Bus.read auth.forgotBus) <|> (parallel $ later' 10000 (pure ForgotFailure))
-  guard (res == ForgotFailure)
+  guard (res == ForgotSucces)
   lift $ H.modify (_ { email = Nothing, passwords = Nothing })
   infoN ("Email sent! Check your inbox in " <> em') 10000.00
 

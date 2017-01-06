@@ -1,13 +1,31 @@
-module Shopie.Validation.Validation where
+module Shopie.Validation.Validation
+  ( Checker
+  , CheckerM
+  , Validator(..)
+  , Validation(..)
+  , censorV
+  , attach
+  , attachM
+  , validation
+  , validation'
+  ) where
 
 import Prelude
+
+import Control.Alt (class Alt)
+import Control.Alternative (class Alternative)
+import Control.Plus (class Plus)
 
 import Data.Either (Either(..), either)
 import Data.List (List(Nil), (:))
 import Data.Lens (Lens', set, view)
-import Data.Tuple (Tuple(..))
+import Data.Maybe (Maybe(..))
 import Data.Monoid (class Monoid, mempty)
+import Data.Newtype (class Newtype)
 import Data.Profunctor (class Profunctor)
+import Data.Profunctor.Choice (class Choice)
+import Data.Profunctor.Strong (class Strong)
+import Data.Tuple (Tuple(..))
 
 
 type Checker e a b = a -> Either e b
@@ -17,15 +35,30 @@ newtype Validator k v m a b = Validator (a -> m (Either (Tuple k v) b))
 
 newtype Validation e m s a = Validation (s -> m (Tuple e a))
 
-runV :: forall e m s a. Validation e m s a -> s -> m (Tuple e a)
-runV (Validation f) = f
+censorV
+  :: forall e m s a
+   . (Monad m, Monoid e, Eq e)
+  => Validation e m s a
+  -> s
+  -> m (Either e a)
+censorV (Validation f) = f >=> un
+  where
+    un (Tuple e a') = if e == mempty then pure (Right a') else pure (Left e)
 
-attach :: forall k v m a b. Applicative m => Checker v a b -> k -> Validator k v m a b
-attach checker field = Validator $ \x ->
+hustV
+  :: forall e m s a
+   . (Monad m, Monoid e, Eq e)
+  => Validation e m s a
+  -> s
+  -> m (Maybe a)
+hustV v = map (either (const Nothing) Just) <<< censorV v
+
+attach :: forall k v m a b. Applicative m => k -> Checker v a b -> Validator k v m a b
+attach field checker = Validator $ \x ->
   either (pure <<< Left <<< Tuple field) (pure <<< Right) (checker x)
 
-attachM :: forall k v m a b. Monad m => CheckerM v m a b -> k -> Validator k v m a b
-attachM checker field = Validator $ \x ->
+attachM :: forall k v m a b. Monad m => k -> CheckerM v m a b -> Validator k v m a b
+attachM field checker = Validator $ \x ->
   checker x >>= either (pure <<< Left <<< Tuple field) (pure <<< Right)
 
 validation
@@ -53,6 +86,8 @@ validation' lns (Validator f) = Validation $ \s ->
     Left e -> pure (Tuple (e : Nil) s)
     Right b -> pure (Tuple Nil (set lns b s))
 
+derive instance newtypeValidator :: Newtype (Validator k v m a b) _
+
 instance semigroupoidValidator :: Monad m => Semigroupoid (Validator k v m) where
   compose (Validator f) (Validator g) = Validator $ \a ->
     g a >>= either (pure <<< Left) f
@@ -69,8 +104,36 @@ instance applyValidator :: Apply m => Apply (Validator k v m a) where
 instance applicativeValidator :: Applicative m => Applicative (Validator k v m a) where
   pure a = Validator (\_ -> pure (Right a))
 
+instance altValidator :: (Semigroup k, Semigroup v, Monad m) => Alt (Validator k v m a) where
+  alt (Validator f) (Validator g) = Validator \a -> do
+    rm <- f a
+    case rm of
+      Right x -> pure (Right x)
+      Left err -> do
+        rn <- g a
+        case rn of
+          Right x' -> pure (Right x')
+          Left err' -> pure (Left (err <> err'))
+
+instance plusValidator :: (Monoid k, Monoid v, Monad m) => Plus (Validator k v m a) where
+  empty = Validator \_ -> pure (Left mempty)
+
+instance alternativeValidator :: (Monoid k, Monoid v, Monad m) => Alternative (Validator k v m a)
+
 instance profunctorValidator :: Functor m => Profunctor (Validator k v m) where
   dimap f g (Validator ft) = Validator (f >>> ft >>> map (map g))
+
+instance strongValidator :: Functor m => Strong (Validator k v m) where
+  first  (Validator f) = Validator \(Tuple s x) -> map (map (_ `Tuple` x)) (f s)
+  second (Validator f) = Validator \(Tuple x s) -> map (map (Tuple x)) (f s)
+
+instance choiceValidator :: Applicative m => Choice (Validator k v m) where
+  left  (Validator f) = Validator $ either (map (map Left) <<< f) (pure <<< Right <<< Right)
+  right (Validator f) = Validator $ either (pure <<< Right <<< Left) (map (map Right) <<< f)
+
+-- Validation
+
+derive instance newtypeValidation :: Newtype (Validation e m s a) _
 
 instance semigroupoidValidation :: (Monad m, Semigroup e) => Semigroupoid (Validation e m) where
   compose (Validation f) (Validation g) = Validation $ \s ->
@@ -90,3 +153,13 @@ instance applicativeValidation :: (Applicative m, Monoid e) => Applicative (Vali
 
 instance profunctorValidation :: Functor m => Profunctor (Validation e m) where
   dimap f g (Validation ft) = Validation (f >>> ft >>> map (map g))
+
+instance strongValidation :: Functor m => Strong (Validation e m) where
+  first  (Validation f) = Validation \(Tuple s x) -> map (map (_ `Tuple` x)) (f s)
+  second (Validation f) = Validation \(Tuple x s) -> map (map (Tuple x)) (f s)
+
+instance choiceValidation :: (Applicative m, Monoid e) => Choice (Validation e m) where
+  left  (Validation f) =
+    Validation $ either (map (map Left) <<< f) (pure <<< Tuple (mempty :: e) <<< Right)
+  right (Validation f) =
+    Validation $ either (pure <<< Tuple (mempty :: e) <<< Left) (map (map Right) <<< f)
