@@ -33,25 +33,26 @@ type CheckerM e m a b = a -> m (Either e b)
 
 newtype Validator k v m a b = Validator (a -> m (Either (Tuple k v) b))
 
-newtype Validation e m s a = Validation (s -> m (Tuple e a))
+newtype Validation e m s a = Validation (s -> m (Tuple (Maybe e) a))
 
 censorV
   :: forall e m s a
-   . (Monad m, Monoid e, Eq e)
+   . Monad m
   => Validation e m s a
   -> s
   -> m (Either e a)
 censorV (Validation f) = f >=> un
   where
-    un (Tuple e a') = if e == mempty then pure (Right a') else pure (Left e)
+    un (Tuple Nothing a') = pure (Right a')
+    un (Tuple (Just e) _) = pure (Left e)
 
-hustV
+hushV
   :: forall e m s a
-   . (Monad m, Monoid e, Eq e)
+   . Monad m
   => Validation e m s a
   -> s
   -> m (Maybe a)
-hustV v = map (either (const Nothing) Just) <<< censorV v
+hushV v = map (either (const Nothing) Just) <<< censorV v
 
 attach :: forall k v m a b. Applicative m => k -> Checker v a b -> Validator k v m a b
 attach field checker = Validator $ \x ->
@@ -70,8 +71,8 @@ validation
   -> Validation (List (Tuple k v)) m s s
 validation lns a (Validator f) = Validation $ \s ->
   f a >>= case _ of
-    Left e -> pure (Tuple (e : Nil) s)
-    Right b -> pure (Tuple Nil (set lns b s))
+    Left e -> pure (Tuple (Just (e : Nil)) s)
+    Right b -> pure (Tuple Nothing (set lns b s))
 
 -- | a version of validation which input is taken by focusing the field on the data
 -- | structure.
@@ -83,8 +84,8 @@ validation'
   -> Validation (List (Tuple k v)) m s s
 validation' lns (Validator f) = Validation $ \s ->
   f (view lns s) >>= case _ of
-    Left e -> pure (Tuple (e : Nil) s)
-    Right b -> pure (Tuple Nil (set lns b s))
+    Left e -> pure (Tuple (Just (e : Nil)) s)
+    Right b -> pure (Tuple Nothing (set lns b s))
 
 derive instance newtypeValidator :: Newtype (Validator k v m a b) _
 
@@ -139,8 +140,8 @@ instance semigroupoidValidation :: (Monad m, Semigroup e) => Semigroupoid (Valid
   compose (Validation f) (Validation g) = Validation $ \s ->
     g s >>= \(Tuple e t) -> f t >>= \(Tuple e' u') -> pure (Tuple (e <> e') u')
 
-instance categoryValidation :: (Monad m, Monoid e) => Category (Validation e m) where
-  id = Validation $ \s -> pure (Tuple (mempty :: e) s)
+instance categoryValidation :: (Monad m, Semigroup e) => Category (Validation e m) where
+  id = Validation $ \s -> pure (Tuple Nothing s)
 
 instance functorValidation :: Functor m => Functor (Validation e m s) where
   map f (Validation g) = Validation (map (map f) <<< g)
@@ -148,7 +149,7 @@ instance functorValidation :: Functor m => Functor (Validation e m s) where
 instance applyValidation :: (Apply m, Semigroup e) => Apply (Validation e m s) where
   apply (Validation f) (Validation g) = Validation \x -> apply <$> f x <*> g x
 
-instance applicativeValidation :: (Applicative m, Monoid e) => Applicative (Validation e m s) where
+instance applicativeValidation :: (Applicative m, Semigroup e) => Applicative (Validation e m s) where
   pure a = Validation (\_ -> pure (pure a))
 
 instance profunctorValidation :: Functor m => Profunctor (Validation e m) where
@@ -158,8 +159,8 @@ instance strongValidation :: Functor m => Strong (Validation e m) where
   first  (Validation f) = Validation \(Tuple s x) -> map (map (_ `Tuple` x)) (f s)
   second (Validation f) = Validation \(Tuple x s) -> map (map (Tuple x)) (f s)
 
-instance choiceValidation :: (Applicative m, Monoid e) => Choice (Validation e m) where
+instance choiceValidation :: Applicative m => Choice (Validation e m) where
   left  (Validation f) =
-    Validation $ either (map (map Left) <<< f) (pure <<< Tuple (mempty :: e) <<< Right)
+    Validation $ either (map (map Left) <<< f) (pure <<< Tuple Nothing <<< Right)
   right (Validation f) =
-    Validation $ either (pure <<< Tuple (mempty :: e) <<< Left) (map (map Right) <<< f)
+    Validation $ either (pure <<< Tuple Nothing <<< Left) (map (map Right) <<< f)
