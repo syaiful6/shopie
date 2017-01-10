@@ -8,6 +8,8 @@ module Shopie.Form.Formlet
   , file
   , check
   , checkM
+  , validate
+  , validateOptional
   , validateM
   , module ExposeForm
   ) where
@@ -35,10 +37,8 @@ text :: forall v m. (Monad m, Semigroup v) => Formlet v m String
 text def = FO.Pure $ IF.text $ fromMaybe "" def
 
 choice
-  :: forall v m a
-   . (Eq a, Monad m, Semigroup v)
-  => NonEmpty List (Tuple a v)
-  -> Formlet v m a
+  :: forall v m a. (Eq a, Monad m, Semigroup v)
+  => NonEmpty List (Tuple a v) -> Formlet v m a
 choice (def':|items) def =
   let
     pair s t = Tuple (show s) t
@@ -46,19 +46,14 @@ choice (def':|items) def =
   in choiceWith (pair 0 def' :| fromFoldable (unwrap zipped)) def
 
 choiceWith
-  :: forall v m a
-   . (Eq a, Monad m, Semigroup v)
-  => NonEmpty List (Tuple String (Tuple a v))
-  -> Formlet v m a
+  :: forall v m a. (Eq a, Monad m, Semigroup v)
+  => NonEmpty List (Tuple String (Tuple a v)) -> Formlet v m a
 choiceWith ne@(_:|items) def =
   choiceWith' ne (def >>= (\d -> findIndex ((eq d) <<< fst <<< snd) items))
 
 choiceWith'
-  :: forall v m a
-   . (Monad m, Semigroup v)
-  => NonEmpty List (Tuple String (Tuple a v))
-  -> Maybe Int
-  -> FO.Form v m a
+  :: forall v m a. (Monad m, Semigroup v)
+  => NonEmpty List (Tuple String (Tuple a v)) -> Maybe Int -> FO.Form v m a
 choiceWith' (default':|items) def =
   fromMaybe defaultItem <<< head <<< map fst <$> (FO.Pure (IF.choice (Tuple "" merged : Nil) def'))
   where
@@ -75,31 +70,28 @@ file :: forall v m. (Monad m, Semigroup v) => FO.Form v m (Maybe FilePath)
 file = head <$> FO.Pure IF.file
 
 check
-  :: forall v m a
-   . (Monad m, Semigroup v)
-  => v
-  -> (a -> Boolean)
-  -> FO.Form v m a
-  -> FO.Form v m a
+  :: forall v m a. (Monad m, Semigroup v)
+  => v -> (a -> Boolean) -> FO.Form v m a -> FO.Form v m a
 check err = checkM err <<< compose pure
 
 checkM
-  :: forall v m a
-   . (Monad m, Semigroup v)
-  => v
-  -> (a -> m Boolean)
-  -> FO.Form v m a
-  -> FO.Form v m a
+  :: forall v m a. (Monad m, Semigroup v)
+  => v -> (a -> m Boolean) -> FO.Form v m a -> FO.Form v m a
 checkM err predicate form = validateM f form
   where
     f x = do
       r <- predicate x
       pure $ if r then pure x else invalid err
 
+validate :: forall v m a b. Monad m => (a -> V v b) -> FO.Form v m a -> FO.Form v m b
+validate = validateM <<< compose pure
+
+validateOptional
+  :: forall v m a b. (Monad m, Semigroup v)
+  => (a -> V v b) -> FO.Form v m (Maybe a) -> FO.Form v m (Maybe b)
+validateOptional f = validate (FO.forOptional f)
+
 validateM
-  :: forall v m a b
-   . Monad m
-  => (a -> m (V v b))
-  -> FO.Form v m a
-  -> FO.Form v m b
+  :: forall v m a b. Monad m
+  => (a -> m (V v b)) -> FO.Form v m a -> FO.Form v m b
 validateM = FO.transform

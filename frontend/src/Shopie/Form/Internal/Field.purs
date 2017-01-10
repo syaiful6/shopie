@@ -1,6 +1,5 @@
 module Shopie.Form.Internal.Field
   ( Field(..)
-  , SomeField(..)
   , Grouped
   , ChoiceF(..)
   , SomeFieldF(..)
@@ -63,7 +62,7 @@ bool b = Bool b id
 choice :: forall v a. Grouped v a -> (List Int) -> Field v (List (Tuple a Int))
 choice g i = Choice (mkExists (ChoiceF g i id))
 
-file :: forall v a. Field v (List FilePath)
+file :: forall v. Field v (List FilePath)
 file = File id
 
 fieldMapV :: forall v w a. (v -> w) -> Field v a -> Field w a
@@ -75,15 +74,23 @@ fieldMapV f (Choice d) =
     Choice (mkExists (ChoiceF (map (second (map (second (second f)))) xs) i p))) d
 fieldMapV _ (File p) = File p
 
-evalField
-  :: forall v a
-   . Method
-  -> List FormInput
-  -> Field v a
-  -> a
+evalField :: forall v a. Method -> List FormInput -> Field v a -> a
 evalField _ _ (Singleton x) = x
 evalField _ (TextInput x : _) (Text _ proof) = coerceSymm proof x
 evalField _ _ (Text x proof) = coerceSymm proof x
+evalField _ ts@(TextInput _ : _) (Choice d) =
+  runExists (\(ChoiceF xs _ proof) ->
+    let ls' = concat (map snd xs) in
+    coerceSymm proof $ catMaybes $
+      map (\x' ->
+        case x' of
+          TextInput x -> do
+            t <- head <<< reverse $ toPath x
+            Tuple c i' <- lookupIdx t ls'
+            pure (Tuple (fst c) i')
+          FileInput _ -> Nothing
+      ) ts
+  ) d
 evalField Get _ (Choice d) =
   runExists (\(ChoiceF ls x proof) ->
     let ls' = concat (map snd ls) in
@@ -91,19 +98,6 @@ evalField Get _ (Choice d) =
   ) d
 evalField Post _ (Choice d) =
   runExists (\(ChoiceF _ _ proof) -> coerceSymm proof Nil) d
-evalField _ ts@(TextInput _ : _) (Choice d) =
-  runExists (\(ChoiceF xs i proof) ->
-    let ls' = concat (map snd xs) in
-    coerceSymm proof $ catMaybes $
-      map (\x' ->
-        case x' of
-          TextInput x -> do
-            t <- head <<< reverse $ toPath x
-            Tuple c i <- lookupIdx t ls'
-            pure (Tuple (fst c) i)
-          FileInput _ -> Nothing
-      ) ts
-  ) d
 evalField Get _ (Bool x proof) = coerceSymm proof x
 evalField Post (TextInput x : _) (Bool _ proof) = coerceSymm proof (x == "on")
 evalField Post _ (Bool _ proof) = coerceSymm proof false

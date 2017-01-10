@@ -5,7 +5,7 @@ import Prelude
 import Data.Identity (Identity)
 import Data.Exists (runExists)
 import Data.Foldable (foldr)
-import Data.List (List(Nil), (:), (!!), concatMap, mapMaybe)
+import Data.List (List, (:), concatMap, mapMaybe)
 import Data.Monoid (class Monoid, mempty)
 
 import Shopie.Form.Internal.Field (Field(File), SomeField(..), SomeFieldF(..))

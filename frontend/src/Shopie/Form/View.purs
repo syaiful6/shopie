@@ -48,15 +48,9 @@ instance functorView :: Functor View where
     ) v
 
 mkView
-  :: forall v m a
-  .  Monad m
-  => String
-  -> Path
-  -> FormTree Identity v m a
-  -> List (Tuple Path FormInput)
-  -> List (Tuple Path v)
-  -> Method
-  -> View v
+  :: forall v m a. Monad m
+  => String -> Path -> FormTree Identity v m a -> List (Tuple Path FormInput)
+  -> List (Tuple Path v) -> Method -> View v
 mkView name ctx form inp err method =
   view $ ViewR
     ({ viewName: name
@@ -92,12 +86,8 @@ getForm name form = do
   pure $ mkView name Nil form' Nil Nil Get
 
 postForm
-  :: forall v m a
-   . Monad m
-  => String
-  -> Form v m a
-  -> (FormEncType -> m (Env m))
-  -> m (Tuple (View v) (Maybe a))
+  :: forall v m a. Monad m
+  => String -> Form v m a -> (FormEncType -> m (Env m)) -> m (Tuple (View v) (Maybe a))
 postForm name form makeEnv = do
   form' <- toFormTree form
   env <- makeEnv $ formTreeEncType form'
