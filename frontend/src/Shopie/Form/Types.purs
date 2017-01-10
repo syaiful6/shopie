@@ -23,6 +23,14 @@ toPath = filter (not <<< S.null) <<< fromFoldable <<< S.split (S.Pattern ".")
 fromPath :: Path -> String
 fromPath = intercalate "."
 
+type FilePath = String
+
 data FormInput = TextInput String | FileInput String
+
+derive instance eqFormInput :: Eq FormInput
+derive instance ordFormInput :: Eq FormInput
+instance showFormInput :: Show FormInput where
+  show (TextInput t) = "(TextInput" <> t <> ")"
+  show (FileInput t) = "(TextInput" <> t <> ")"
 
 type Env m = Path -> m (List FormInput)
