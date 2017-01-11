@@ -2,14 +2,15 @@ module Shopie.Form.Internal.Form where
 
 import Prelude
 
-import Data.Identity (Identity(..))
 import Data.Bifunctor (lmap)
+import Data.Either (Either(..))
 import Data.Exists (Exists, mkExists, runExists)
+import Data.Functor.Day (Day, day, runDay)
 import Data.Foldable (intercalate)
+import Data.Identity (Identity(..))
 import Data.Leibniz (type (~), coerceSymm)
 import Data.List (List(Nil), (:), drop, concat, unzip, null)
 import Data.Maybe (Maybe(..), maybe)
-import Data.Either (Either(..))
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.Newtype (unwrap)
 import Data.Traversable (traverse, sequence)
@@ -27,24 +28,24 @@ type Form v m a = FormTree m v m a
 data FormTree t v m a
   = Ref String (FormTree t v m a)
   | Pure (Field v a)
-  | Ap (Exists (ApF t v m a))
+  | Ap (Day (FormTree t v m) (FormTree t v m) a)
   | Map (Exists (MapF t v m a))
   | Monadic (t (FormTree t v m a))
   | FormList (Exists (FormListF t v m a))
   | Metadata (List FormMeta) (FormTree t v m a)
 
 -- | Used to encode RankNTypes on Ap and Map constructor of FormTree
-data ApF t v m a b = ApF (FormTree t v m (b -> a)) (FormTree t v m b)
 data MapF t v m a b = MapF (b -> m (V v a)) (FormTree t v m b)
 data FormListF t v m a b
   = FormListF (DefaultList (FormTree t v m b)) (FormTree t v m (List Int)) (a ~ List b)
 
 instance functorFormTree :: (Monad m, Semigroup v) => Functor (FormTree t v m) where
-  map = transform <<< compose pure <<< compose pure
+  map f (Ap d) = Ap (f <$> d)
+  map f fa = transform (\x -> pure (pure (f x))) fa
 
 instance applyFormTree :: (Monad m, Semigroup v) => Apply (FormTree t v m) where
   apply (Pure (Singleton k)) (Pure (Singleton a)) = Pure (Singleton (k a))
-  apply (Pure (Singleton k)) fb = k <$> fb
+  apply (Pure (Singleton k)) (Ap d) = Ap (k <$> d)
   apply fa fb = apFT fa fb
 
 instance applicativeFormTree :: (Monad m, Semigroup v) => Applicative (FormTree t v m) where
@@ -78,7 +79,7 @@ mapFT :: forall t v m a b. (b -> m (V v a)) -> FormTree t v m b -> FormTree t v 
 mapFT f x = Map (mkExists (MapF f x))
 
 apFT :: forall t v m a b. FormTree t v m (b -> a) -> FormTree t v m b -> FormTree t v m a
-apFT f x = Ap (mkExists (ApF f x))
+apFT f x = Ap (day ($) f x)
 
 -- Helper for the FormTree Show instance
 showForm :: forall v m a. FormTree Identity v m a -> List String
@@ -88,7 +89,7 @@ showForm form = case form of
   Pure x ->
     ("Pure (" <> show x <> ")") : Nil
   Ap d ->
-    runExists (\(ApF x y) ->
+    runDay (\_ x y ->
       concat
         (("App" : Nil) : (map indent (showForm x)) : (map indent (showForm y)) : Nil)) d
   Map d ->
@@ -129,7 +130,8 @@ bindV m f = m >>= unV (pure <<< invalid) f
 toFormTree :: forall v m a. Monad m => Form v m a -> m (FormTree Identity v m a)
 toFormTree (Ref r x) = map (Ref r) (toFormTree x)
 toFormTree (Pure x) = pure (Pure x)
-toFormTree (Ap d) = runExists (\(ApF x y) -> apFT <$> (toFormTree x) <*> (toFormTree y)) d
+toFormTree (Ap d) =
+  runDay (\i x y -> day i <$> (toFormTree x) <*> (toFormTree y) <#> Ap) d
 toFormTree (Map d) = runExists (\(MapF f x) -> map (mapFT f) (toFormTree x)) d
 toFormTree (Monadic x) = x >>= toFormTree >>= pure <<< Monadic <<< Identity
 toFormTree (FormList d) =
@@ -154,7 +156,7 @@ toField (Metadata _ x) = toField x
 children :: forall v m a. FormTree Identity v m a -> List (SomeForm v m)
 children (Ref _ x) = children x
 children (Pure x) = Nil
-children (Ap d) = runExists (\(ApF x y) -> (someForm x : someForm y : Nil)) d
+children (Ap d) = runDay (\_ x y -> (someForm x : someForm y : Nil)) d
 children (Map d) = runExists (\(MapF _ x) -> children x) d
 children (Monadic x) = children $ unwrap x
 children (FormList d) = runExists (\(FormListF _ is _) -> someForm is : Nil) d
@@ -224,7 +226,7 @@ lookupFormMetadata path = go Nil path <<< someForm
 formMapV :: forall v w m a. Monad m => (v -> w) -> FormTree Identity v m a -> FormTree Identity w m a
 formMapV f (Ref r x) = Ref r $ formMapV f x
 formMapV f (Pure x)  = Pure (fieldMapV f x)
-formMapV f (Ap d)    = runExists (\(ApF x y) -> apFT (formMapV f x) (formMapV f y)) d
+formMapV f (Ap d)    = runDay (\i x y -> Ap $ day i (formMapV f x) (formMapV f y)) d
 formMapV f (Map d)   = runExists (\(MapF g x) -> mapFT (g >=> pure <<< lmap f) (formMapV f x)) d
 formMapV f (Monadic x) = formMapV f $ unwrap x
 formMapV f (FormList x) =
@@ -261,10 +263,10 @@ eval' path method env form = case form of
       pure (Tuple path v)
 
   Ap d ->
-    runExists (\(ApF x y) -> do
+    runDay (\i x y -> do
       Tuple x' inp1 <- eval' path method env x
       Tuple y' inp2 <- eval' path method env y
-      pure (Tuple (x' <*> y') (inp1 <> inp2))) d
+      pure (Tuple (i <$> x' <*> y') (inp1 <> inp2))) d
 
   Map d ->
     runExists (\(MapF f x) -> do
