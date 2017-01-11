@@ -12,23 +12,25 @@ module Shopie.Form.Formlet
   , validateOptional
   , validateM
   , module ExposeForm
+  , module ExposeEnc
   ) where
 
 import Prelude
 
-import Data.List (List(Nil), (:), head, findIndex, fromFoldable)
+import Data.List (List(Nil), (:), catMaybes, head, findIndex, fromFoldable)
 import Data.List.Lazy as LZ
 import Data.List.ZipList (ZipList(..))
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.NonEmpty (NonEmpty, (:|))
+import Data.NonEmpty ((:|))
 import Data.Newtype (unwrap)
 import Data.Tuple (Tuple(Tuple), fst, snd)
 import Data.Validation.Semigroup(V, invalid)
 
 import Shopie.Form.Internal.Field as IF
 import Shopie.Form.Internal.Form as FO
-import Shopie.Form.Internal.Form (Form, FormTree, (.:)) as ExposeForm
-import Shopie.Form.Types (FilePath)
+import Shopie.Form.Internal.Form (Form, FormTree, (.:), monadic) as ExposeForm
+import Shopie.Form.Internal.Encoding (FormEncType(..)) as ExposeEnc
+import Shopie.Form.Types (FilePath, Nel)
 
 
 type Formlet v m a = Maybe a -> FO.Form v m a
@@ -38,22 +40,21 @@ text def = FO.Pure $ IF.text $ fromMaybe "" def
 
 choice
   :: forall v m a. (Eq a, Monad m, Semigroup v)
-  => NonEmpty List (Tuple a v) -> Formlet v m a
+  => Nel (Tuple a v) -> Formlet v m a
 choice (def':|items) def =
   let
-    pair s t = Tuple (show s) t
-    zipped = pair <$> ZipList (LZ.iterate (add 1) 1) <*> ZipList (LZ.fromFoldable items)
-  in choiceWith (pair 0 def' :| fromFoldable (unwrap zipped)) def
+    zipped = Tuple <$> ZipList (makeRefs 1) <*> ZipList (LZ.fromFoldable items)
+  in choiceWith (Tuple "0" def' :| fromFoldable (unwrap zipped)) def
 
 choiceWith
   :: forall v m a. (Eq a, Monad m, Semigroup v)
-  => NonEmpty List (Tuple String (Tuple a v)) -> Formlet v m a
+  => Nel (Tuple String (Tuple a v)) -> Formlet v m a
 choiceWith ne@(_:|items) def =
   choiceWith' ne (def >>= (\d -> findIndex ((eq d) <<< fst <<< snd) items))
 
 choiceWith'
   :: forall v m a. (Monad m, Semigroup v)
-  => NonEmpty List (Tuple String (Tuple a v)) -> Maybe Int -> FO.Form v m a
+  => Nel (Tuple String (Tuple a v)) -> Maybe Int -> FO.Form v m a
 choiceWith' (default':|items) def =
   fromMaybe defaultItem <<< head <<< map fst <$> (FO.Pure (IF.choice (Tuple "" merged : Nil) def'))
   where
@@ -62,6 +63,30 @@ choiceWith' (default':|items) def =
     def' = case def of
       Just x  -> (x : Nil)
       Nothing -> (0 : Nil)
+
+choiceMultiple
+  :: forall v m a. (Eq a, Monad m, Semigroup v)
+  => List (Tuple a v) -> Formlet v m (List a)
+choiceMultiple items def =
+  let
+    zipped = Tuple <$> ZipList (makeRefs 1) <*> ZipList (LZ.fromFoldable items)
+  in choiceWithMultiple (fromFoldable (unwrap zipped)) def
+
+choiceWithMultiple
+  :: forall v m a. (Eq a, Monad m, Semigroup v)
+  => List (Tuple String (Tuple a v)) -> Formlet v m (List a)
+choiceWithMultiple items def = choiceWithMultiple' items def'
+  where
+    def' = def >>= Just <<< catMaybes <<< map (\d -> findIndex ((eq d) <<< fst <<< snd) items)
+
+choiceWithMultiple'
+  :: forall v m a. (Monad m, Semigroup v)
+  => List (Tuple String (Tuple a v)) -> Maybe (List Int) -> FO.Form v m (List a)
+choiceWithMultiple' items def = map fst <$> (FO.Pure $ IF.choice ((Tuple "" items : Nil)) def')
+  where
+    def' = case def of
+      Just x -> x
+      Nothing -> Nil
 
 bool :: forall v m. (Monad m, Semigroup v) => Formlet v m Boolean
 bool = FO.Pure <<< IF.bool <<< fromMaybe false
@@ -95,3 +120,6 @@ validateM
   :: forall v m a b. Monad m
   => (a -> m (V v b)) -> FO.Form v m a -> FO.Form v m b
 validateM = FO.transform
+
+makeRefs :: Int -> LZ.List String
+makeRefs s = show <$> LZ.iterate (add s) s

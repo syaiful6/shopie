@@ -4,6 +4,7 @@ import Prelude
 
 import Data.Foldable (intercalate)
 import Data.List (List, filter, fromFoldable)
+import Data.NonEmpty (NonEmpty)
 import Data.String as S
 
 
@@ -34,3 +35,6 @@ instance showFormInput :: Show FormInput where
   show (FileInput t) = "(TextInput" <> t <> ")"
 
 type Env m = Path -> m (List FormInput)
+
+-- | NonEmpty List
+type Nel a = NonEmpty List a
