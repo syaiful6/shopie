@@ -128,15 +128,15 @@ main = do
     aryaW = Traveller
       ({ name: "Arya Wiraraja"
        , destination: "Nangka"
-       , trans: garuda
-       , transMode: Air
+       , trans: argoLawu
+       , transMode: Rail
        })
 
   testCase "Simple postForm" (Just aryaW) $
     snd $ runTravelM $ postForm "f" (travelerForm Nothing) $ testEnv
       ( Tuple "f.name" "Arya Wiraraja"
       : Tuple "f.destination" "Nangka"
-      : Tuple "f.trans" "garuda-airlines"
-      : Tuple "f.transMode" "Air"
+      : Tuple "f.trans" "train-al"
+      : Tuple "f.transMode" "transMode.2"
       : Nil
       )

@@ -40,10 +40,12 @@ data FormListF t v m a b
   = FormListF (DefaultList (FormTree t v m b)) (FormTree t v m (List Int)) (a ~ List b)
 
 instance functorFormTree :: (Monad m, Semigroup v) => Functor (FormTree t v m) where
-  map f t = transform (\b -> pure (pure (f b))) t
+  map = transform <<< compose pure <<< compose pure
 
 instance applyFormTree :: (Monad m, Semigroup v) => Apply (FormTree t v m) where
-  apply = apFT
+  apply (Pure (Singleton k)) (Pure (Singleton a)) = Pure (Singleton (k a))
+  apply (Pure (Singleton k)) fb = k <$> fb
+  apply fa fb = apFT fa fb
 
 instance applicativeFormTree :: (Monad m, Semigroup v) => Applicative (FormTree t v m) where
   pure = Pure <<< Singleton
@@ -81,28 +83,25 @@ apFT f x = Ap (mkExists (ApF f x))
 -- Helper for the FormTree Show instance
 showForm :: forall v m a. FormTree Identity v m a -> List String
 showForm form = case form of
-  Ref r x -> ("Ref " <> show r) : (map indent (showForm x))
-  Pure x -> ("Pure (" <> show x <> ")") : Nil
-  Ap d -> runExists (\(ApF x y) ->
-    concat
-      ( ("App" : Nil)
-      : (map indent (showForm x))
-      : (map indent (showForm y))
-      : Nil
-      )
-  ) d
-  Map d -> runExists (\(MapF _ x) ->
-    "Map _" : (map indent (showForm x))
-  ) d
-  Monadic x -> "Monadic" : (map indent (showForm $ unwrap x))
-  FormList d -> runExists (\(FormListF _ xs _) ->
-    concat
-      ( ("FormList <default>" : Nil)
-      : map indent (showForm xs)
-      : Nil
-      )
-  ) d
-  Metadata m x -> ("Metadata " <> show m) : map indent (showForm x)
+  Ref r x ->
+    ("Ref " <> show r) : (map indent (showForm x))
+  Pure x ->
+    ("Pure (" <> show x <> ")") : Nil
+  Ap d ->
+    runExists (\(ApF x y) ->
+      concat
+        (("App" : Nil) : (map indent (showForm x)) : (map indent (showForm y)) : Nil)) d
+  Map d ->
+    runExists (\(MapF _ x) ->
+      "Map _" : (map indent (showForm x))) d
+  Monadic x ->
+    "Monadic" : (map indent (showForm $ unwrap x))
+  FormList d ->
+    runExists (\(FormListF _ xs _) ->
+      concat
+        (("FormList <default>" : Nil) : map indent (showForm xs) : Nil )) d
+  Metadata m x ->
+    ("Metadata " <> show m) : map indent (showForm x)
   where
     indent = append " "
 
@@ -137,8 +136,7 @@ toFormTree (FormList d) =
   runExists (\(FormListF d is proof) ->
     (\d' fis -> FormList (mkExists (FormListF d' fis proof)))
     <$> (traverse toFormTree d)
-    <*> (toFormTree is)
-  ) d
+    <*> (toFormTree is)) d
 toFormTree (Metadata m x) = map (Metadata m) (toFormTree x)
 
 -- | Returns the topmost untransformed single field, if one exists
@@ -180,8 +178,7 @@ popRef form = case form of
   Map d ->
     runExists (\(MapF g x) -> case popRef x of
       Tuple r form' ->
-        Tuple r (mapFT g form')
-    ) d
+        Tuple r (mapFT g form')) d
   Monadic x ->
     popRef $ unwrap x
   FormList d ->
@@ -211,17 +208,17 @@ lookupFormMetadata
      Path -> FormTree Identity v m a -> List (Tuple (SomeForm v m) (List FormMeta))
 lookupFormMetadata path = go Nil path <<< someForm
   where
-    go md path' (SomeForm form') = runExists (\(SomeFormF form) ->
-      case path' of
-        Nil ->
-          (Tuple (someForm form) (getMetadata form <> md) : Nil)
-        (r : rs) -> case popRef form of
-            Tuple (Just r') stripped
-              | r == r' && null rs -> (Tuple (someForm stripped) (getMetadata form <> md) : Nil)
-              | r == r'            -> children form >>= go (getMetadata form <> md) rs
-              | otherwise          -> Nil
-            Tuple Nothing _        -> children form >>= go (getMetadata form <> md) (r : rs)
-      ) form'
+    go md path' (SomeForm form') =
+      runExists (\(SomeFormF form) ->
+        case path' of
+          Nil ->
+            (Tuple (someForm form) (getMetadata form <> md) : Nil)
+          (r : rs) -> case popRef form of
+              Tuple (Just r') stripped
+                | r == r' && null rs -> (Tuple (someForm stripped) (getMetadata form <> md) : Nil)
+                | r == r'            -> children form >>= go (getMetadata form <> md) rs
+                | otherwise          -> Nil
+              Tuple Nothing _        -> children form >>= go (getMetadata form <> md) (r : rs)) form'
 
 
 formMapV :: forall v w m a. Monad m => (v -> w) -> FormTree Identity v m a -> FormTree Identity w m a
@@ -263,19 +260,20 @@ eval' path method env form = case form of
       v <- val
       pure (Tuple path v)
 
-  Ap d -> runExists (\(ApF x y) -> do
-    Tuple x' inp1 <- eval' path method env x
-    Tuple y' inp2 <- eval' path method env y
-    pure (Tuple (x' <*> y') (inp1 <> inp2))
-  ) d
+  Ap d ->
+    runExists (\(ApF x y) -> do
+      Tuple x' inp1 <- eval' path method env x
+      Tuple y' inp2 <- eval' path method env y
+      pure (Tuple (x' <*> y') (inp1 <> inp2))) d
 
-  Map d -> runExists (\(MapF f x) -> do
-    Tuple x' inp <- eval' path method env x
-    x_ <- bindV (pure x') (f >=> pure <<< ann path)
-    pure (Tuple x_ inp)
-  ) d
+  Map d ->
+    runExists (\(MapF f x) -> do
+      Tuple x' inp <- eval' path method env x
+      x_ <- bindV (pure x') (f >=> pure <<< ann path)
+      pure (Tuple x_ inp)) d
 
-  Monadic x -> eval' path method env $ unwrap x
+  Monadic x ->
+    eval' path method env $ unwrap x
 
   FormList d ->
     runExists (\(FormListF defs fis proof) -> do
@@ -289,10 +287,10 @@ eval' path method env form = case form of
                             method env $ defs `defaultListIndex` i) is
           case unzip res of
             Tuple results inps ->
-              pure (Tuple (coerceSymm proof <$> sequence results) (inp1 <> concat inps))
-    ) d
+              pure (Tuple (coerceSymm proof <$> sequence results) (inp1 <> concat inps))) d
 
-  Metadata _ x -> eval' path method env x
+  Metadata _ x ->
+    eval' path method env x
 
 forOptional :: forall v b a. Semigroup v => (a -> V v b) -> Maybe a -> V v (Maybe b)
 forOptional f = maybe (pure Nothing) (unV invalid (pure <<< pure) <<< f)

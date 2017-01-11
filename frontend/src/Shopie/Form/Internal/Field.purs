@@ -88,14 +88,12 @@ evalField _ ts@(TextInput _ : _) (Choice d) =
             t <- head <<< reverse $ toPath x
             Tuple c i' <- lookupIdx t ls'
             pure (Tuple (fst c) i')
-          FileInput _ -> Nothing
-      ) ts
-  ) d
+          FileInput _ -> Nothing) ts) d
 evalField Get _ (Choice d) =
   runExists (\(ChoiceF ls x proof) ->
     let ls' = concat (map snd ls) in
-    coerceSymm proof $ catMaybes $ (map (\i -> flip Tuple i <<< fst <<< snd <$> ls' !! i) x)
-  ) d
+    coerceSymm proof $ catMaybes $
+      (map (\i -> flip Tuple i <<< fst <<< snd <$> ls' !! i) x)) d
 evalField Post _ (Choice d) =
   runExists (\(ChoiceF _ _ proof) -> coerceSymm proof Nil) d
 evalField Get _ (Bool x proof) = coerceSymm proof x
