@@ -1,8 +1,6 @@
 module Shopie.Form.View
-  ( ViewR(..)
-  , View
+  ( View(..)
   , mkView
-  , unView
   , getForm
   , postForm
   ) where
@@ -20,78 +18,58 @@ import Data.Validation.Semigroup(unV)
 
 import Shopie.Form.Types (Env, FormInput, Path, Method(..))
 import Shopie.Form.Internal.Encoding (FormEncType, formTreeEncType)
-import Shopie.Form.Internal.Form (FormTree, Form, eval, formMapV, toFormTree)
+import Shopie.Form.Internal.Form (FormTree, Form, eval, toFormTree)
 
-import Unsafe.Coerce (unsafeCoerce)
 
-data ViewR v (m :: * -> *) a = ViewR
+newtype View v = View
   { viewName    :: String
   , viewContext :: Path
-  , viewForm    :: FormTree Identity v m a
   , viewInput   :: List (Tuple Path FormInput)
   , viewErrors  :: List (Tuple Path v)
   , viewMethod  :: Method
   }
 
-data View v
-
 instance functorView :: Functor View where
-  map f v =
-    unView (\(ViewR r@{ viewForm, viewErrors }) ->
-      mkView
-        r.viewName
-        r.viewContext
-        (formMapV f viewForm)
-        r.viewInput
-        (map (second f) viewErrors)
-        r.viewMethod
-    ) v
+  map f (View r) =
+    View $ r { viewErrors = map (second f) r.viewErrors }
 
 mkView
-  :: forall v m a. Monad m
-  => String -> Path -> FormTree Identity v m a -> List (Tuple Path FormInput)
+  :: forall v. String -> Path -> List (Tuple Path FormInput)
   -> List (Tuple Path v) -> Method -> View v
-mkView name ctx form inp err method =
-  view $ ViewR
+mkView name ctx inp err method =
+  View
     ({ viewName: name
      , viewContext: ctx
-     , viewForm: form
-     , viewInput: inp
      , viewErrors: err
+     , viewInput: inp
      , viewMethod: method
     })
 
-view :: forall v m a. ViewR v m a -> View v
-view = unsafeCoerce
-
-unView :: forall v r. (forall m a. Monad m => ViewR v m a -> r) -> View v -> r
-unView = unsafeCoerce
-
 instance showView :: Show v => Show (View v) where
-  show v =
-    unView (\(ViewR r) ->
-      "View " <> intercalate " "
-        ([ show r.viewName
-        ,  show r.viewContext
-        ,  show r.viewForm
-        ,  show r.viewInput
-        ,  show r.viewErrors
-        ,  show r.viewMethod
-        ])
-    ) v
+  show (View r) =
+    "View " <> intercalate " "
+      ([ show r.viewName
+      ,  show r.viewContext
+      ,  show r.viewInput
+      ,  show r.viewErrors
+      ,  show r.viewMethod
+      ])
 
-getForm :: forall v m a. Monad m => String -> Form v m a -> m (View v)
+getForm
+  :: forall v m a. Monad m
+  => String -> Form v m a -> m (Tuple (FormTree Identity v m a) (View v))
 getForm name form = do
   form' <- toFormTree form
-  pure $ mkView name Nil form' Nil Nil Get
+  pure $ Tuple form' $ mkView name Nil Nil Nil Get
 
 postForm
   :: forall v m a. Monad m
-  => String -> Form v m a -> (FormEncType -> m (Env m)) -> m (Tuple (View v) (Maybe a))
+  => String -> Form v m a -> (FormEncType -> m (Env m))
+  -> m (Tuple (Tuple (FormTree Identity v m a) (View v)) (Maybe a))
 postForm name form makeEnv = do
   form' <- toFormTree form
   env <- makeEnv $ formTreeEncType form'
   let env' = env <<< ((:) name)
   eval Post env' form' >>= \(Tuple r inp) -> pure $ case unV Left Right r of
-    Left err -> Tuple (mkView name Nil form' inp err Get) Nothing
-    Right x -> Tuple (mkView name Nil form' inp Nil Post) (Just x)
+    Left err -> Tuple (Tuple form' $ mkView name Nil inp err Get) Nothing
+    Right x -> Tuple (Tuple form' $ mkView name Nil inp Nil Post) (Just x)

@@ -9,10 +9,12 @@ import Data.List (List(Nil), (:), filter)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..), snd, fst)
+import Data.String as S
 
 import Control.Monad.Reader (Reader, runReader, ask)
 
-import Shopie.Form.Formlet ((.:), FormEncType, Form, Formlet, monadic, choice, choiceWith, text)
+import Shopie.Form.Formlet ((.:), FormEncType, Form, Formlet, monadic, choice,
+                            choiceWith, text, check)
 import Shopie.Form.Types (Env, FormInput(TextInput), fromPath)
 import Shopie.Form.View (postForm)
 
@@ -106,8 +108,8 @@ instance showTraveller :: Show Traveller where
 
 travelerForm :: Formlet String TravelM Traveller
 travelerForm def = { name: _, destination: _, trans: _, transMode: _}
-  <$> "name"          .: text Nothing
-  <*> "destination"   .: text Nothing
+  <$> "name"          .: check "name cant be empty" (not <<< S.null) (text Nothing)
+  <*> "destination"   .: check "destination cant be empty" (not <<< S.null) (text Nothing)
   <*> "trans"         .: transportationForm Nothing
   <*> "transMode"     .: transModeForm
   <#> Traveller
@@ -136,6 +138,15 @@ main = do
     snd $ runTravelM $ postForm "f" (travelerForm Nothing) $ testEnv
       ( Tuple "f.name" "Arya Wiraraja"
       : Tuple "f.destination" "Nangka"
+      : Tuple "f.trans" "train-al"
+      : Tuple "f.transMode" "transMode.2"
+      : Nil
+      )
+
+  testCase "Invalid post data" Nothing $
+    snd $ runTravelM $ postForm "f" (travelerForm Nothing) $ testEnv
+      ( Tuple "f.name" ""
+      : Tuple "f.destination" ""
       : Tuple "f.trans" "train-al"
       : Tuple "f.transMode" "transMode.2"
       : Nil

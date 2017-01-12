@@ -17,8 +17,8 @@ import Data.Traversable (traverse, sequence)
 import Data.Tuple (Tuple(Tuple), fst)
 import Data.Validation.Semigroup(V, unV, invalid)
 
-import Shopie.Form.Internal.Field ( Field(Singleton), SomeField, evalField, someField
-                                  , fieldMapV)
+import Shopie.Form.Internal.Field (Field(Singleton), SomeField, evalField, someField,
+                                   fieldMapV)
 import Shopie.Form.Types (Env, FormInput, Method, Path)
 
 
