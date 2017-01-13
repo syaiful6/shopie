@@ -26,6 +26,9 @@ module Shopie.Form.Internal.Form
 
 import Prelude
 
+import Control.Apply (lift2)
+import Control.Biapply (biapply)
+
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Exists (Exists, mkExists, runExists)
@@ -37,6 +40,7 @@ import Data.List (List(Nil), (:), drop, concat, unzip, null)
 import Data.Maybe (Maybe(..), maybe)
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.Newtype (unwrap)
+import Data.Profunctor.Strong ((***), (&&&), second)
 import Data.Traversable (traverse, sequence)
 import Data.Tuple (Tuple(Tuple), fst)
 import Data.Validation.Semigroup(V, unV, invalid)
@@ -210,16 +214,12 @@ popRef form = case form of
   Ap _ ->
     Tuple Nothing form
   Map d ->
-    runExists (\(MapF g x) -> case popRef x of
-      Tuple r form' ->
-        Tuple r (mapFT g form')) d
+    runExists (\(MapF g x) -> second (mapFT g) (popRef x)) d
   Monadic x ->
     popRef $ unwrap x
   FormList d ->
     Tuple Nothing form
-  Metadata m x -> case popRef x of
-    Tuple r form' ->
-      Tuple r (Metadata m form')
+  Metadata m x -> second (Metadata m) (popRef x)
 
 -- | Return the first/topmost label of a form
 getRef :: forall v m a. Form' v m a -> Maybe String
@@ -240,18 +240,17 @@ lookupForm path = map fst <<< lookupFormMetadata path
 lookupFormMetadata :: forall v m a. Path -> Form' v m a -> List (Tuple (SomeForm v m) (List FormMeta))
 lookupFormMetadata path = go Nil path <<< someForm
   where
-    go md path' (SomeForm form') =
-      runExists (\(SomeFormF form) ->
+    go md path' =
+      runSomeForm \form ->
         case path' of
           Nil ->
             (Tuple (someForm form) (getMetadata form <> md) : Nil)
           (r : rs) -> case popRef form of
-              Tuple (Just r') stripped
-                | r == r' && null rs -> (Tuple (someForm stripped) (getMetadata form <> md) : Nil)
-                | r == r'            -> children form >>= go (getMetadata form <> md) rs
-                | otherwise          -> Nil
-              Tuple Nothing _        -> children form >>= go (getMetadata form <> md) (r : rs)) form'
-
+            Tuple (Just r') stripped
+              | r == r' && null rs -> (Tuple (someForm stripped) (getMetadata form <> md) : Nil)
+              | r == r'            -> children form >>= go (getMetadata form <> md) rs
+              | otherwise          -> Nil
+            Tuple Nothing _        -> children form >>= go (getMetadata form <> md) (r : rs)
 
 formMapV :: forall v w m a. Monad m => (v -> w) -> Form' v m a -> Form' w m a
 formMapV f (Ref r x) = Ref r $ formMapV f x
@@ -266,11 +265,7 @@ formMapV f (FormList x) =
 formMapV f (Metadata m x) = Metadata m $ formMapV f x
 
 ann :: forall v a. Path -> V v a -> V (List (Tuple Path v)) a
-ann path =
-  let
-    build :: v -> List (Tuple Path v)
-    build x = Tuple path x : Nil
-  in unV (invalid <<< build) pure
+ann path = unV (invalid <<< pure <<< Tuple path) pure
 
 eval
   :: forall v m a. Monad m
@@ -285,18 +280,15 @@ eval'
 eval' path method env form = case form of
   Ref r x -> eval' (path <> (r : Nil)) method env x
 
-  Pure fi -> do
-    val <- env path
-    let x = evalField method val fi
-    pure $ Tuple (pure x) $ do
-      v <- val
-      pure (Tuple path v)
+  Pure fi ->
+    (pure <<< flip (evalField method) fi &&& (_ >>= pure <<< Tuple path))
+    <$> env path
 
   Ap d ->
-    runDay (\i x y -> do
-      Tuple x' inp1 <- eval' path method env x
-      Tuple y' inp2 <- eval' path method env y
-      pure (Tuple (i <$> x' <*> y') (inp1 <> inp2))) d
+    runDay (\i x y ->
+      biapply <<< (lift2 i *** append)
+      <$> eval' path method env x
+      <*> eval' path method env y) d
 
   Map d ->
     runExists (\(MapF f x) -> do
@@ -313,13 +305,11 @@ eval' path method env form = case form of
       let ris' = unV Left Right ris
       case ris' of
         Left err -> pure (Tuple (invalid err) inp1)
-        Right is -> do
-          res <- traverse
+        Right is ->
+          (map (coerceSymm proof) <<< sequence *** append inp1 <<< concat) <<< unzip
+          <$> traverse
             (\i -> eval' (path <> ((show i) : Nil))
-                            method env $ defs `defaultListIndex` i) is
-          case unzip res of
-            Tuple results inps ->
-              pure (Tuple (coerceSymm proof <$> sequence results) (inp1 <> concat inps))) d
+                            method env $ defs `defaultListIndex` i) is) d
 
   Metadata _ x ->
     eval' path method env x
