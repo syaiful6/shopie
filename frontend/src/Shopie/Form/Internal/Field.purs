@@ -1,15 +1,15 @@
 module Shopie.Form.Internal.Field
-  ( Field(..)
+  ( Field
   , Grouped
-  , ChoiceF(..)
-  , SomeFieldF(..)
-  , SomeField(..)
+  , SomeField
   , someField
+  , runSomeField
   , singleton
   , text
   , bool
   , choice
   , file
+  , isFile
   , fieldMapV
   , evalField
   ) where
@@ -43,6 +43,9 @@ data SomeField v = SomeField (Exists (SomeFieldF v))
 someField :: forall v a. Field v a -> SomeField v
 someField f = SomeField (mkExists (SomeFieldF f))
 
+runSomeField :: forall v r. (forall a. Field v a -> r) -> SomeField v -> r
+runSomeField f (SomeField d) = runExists (\(SomeFieldF field) -> f field) d
+
 instance showField :: Show (Field v a) where
   show (Text s _) = "Text " <> show s
   show (Bool b _) = "Bool " <> show b
@@ -64,6 +67,10 @@ choice g i = Choice (mkExists (ChoiceF g i id))
 
 file :: forall v. Field v (List FilePath)
 file = File id
+
+isFile :: forall v a. Field v a -> Boolean
+isFile (File _) = true
+isFile _ = false
 
 fieldMapV :: forall v w a. (v -> w) -> Field v a -> Field w a
 fieldMapV _ (Singleton x) = Singleton x

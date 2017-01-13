@@ -1,4 +1,28 @@
-module Shopie.Form.Internal.Form where
+module Shopie.Form.Internal.Form
+  ( Form
+  , Form'
+  , FormTree
+  , SomeForm
+  , FormMeta(..)
+  , pushRef, (.:)
+  , getRef
+  , monadic
+  , field
+  , formList
+  , formMapV
+  , transform
+  , someForm
+  , runSomeForm
+  , forOptional
+  , eval
+  , eval'
+  , toField
+  , toFormTree
+  , children
+  , getMetadata
+  , lookupForm
+  , lookupFormMetadata
+  ) where
 
 import Prelude
 
@@ -17,13 +41,16 @@ import Data.Traversable (traverse, sequence)
 import Data.Tuple (Tuple(Tuple), fst)
 import Data.Validation.Semigroup(V, unV, invalid)
 
-import Shopie.Form.Internal.Field (Field(Singleton), SomeField, evalField, someField,
-                                   fieldMapV)
+import Shopie.Form.Internal.Field (Field, SomeField, evalField, someField,
+                                   fieldMapV, singleton)
 import Shopie.Form.Types (Env, FormInput, Method, Path)
 
 
 -- | Base type for a form.
 type Form v m a = FormTree m v m a
+
+--
+type Form' v m a = FormTree Identity v m a
 
 data FormTree t v m a
   = Ref String (FormTree t v m a)
@@ -44,12 +71,10 @@ instance functorFormTree :: (Monad m, Semigroup v) => Functor (FormTree t v m) w
   map f fa = transform (\x -> pure (pure (f x))) fa
 
 instance applyFormTree :: (Monad m, Semigroup v) => Apply (FormTree t v m) where
-  apply (Pure (Singleton k)) (Pure (Singleton a)) = Pure (Singleton (k a))
-  apply (Pure (Singleton k)) (Ap d) = Ap (k <$> d)
   apply fa fb = apFT fa fb
 
 instance applicativeFormTree :: (Monad m, Semigroup v) => Applicative (FormTree t v m) where
-  pure = Pure <<< Singleton
+  pure = Pure <<< singleton
 
 instance showFormTree :: Show (FormTree Identity v m a) where
   show = intercalate "\n" <<< showForm
@@ -57,14 +82,17 @@ instance showFormTree :: Show (FormTree Identity v m a) where
 -- -- | Value-agnostic Form
 data SomeForm v m = SomeForm (Exists (SomeFormF v m))
 
-data SomeFormF v m a = SomeFormF (FormTree Identity v m a)
+data SomeFormF v m a = SomeFormF (Form' v m a)
 
 instance showSomeForm :: Show (SomeForm v m) where
-  show (SomeForm d) = runExists (\(SomeFormF f) -> show f) d
+  show = runSomeForm show
 
 -- | smart constructor for SomeForm
-someForm :: forall v m a. FormTree Identity v m a -> SomeForm v m
+someForm :: forall v m a. Form' v m a -> SomeForm v m
 someForm ft = SomeForm (mkExists (SomeFormF ft))
+
+runSomeForm :: forall v m r. (forall a. Form' v m a -> r) -> SomeForm v m -> r
+runSomeForm f (SomeForm d) = runExists (\(SomeFormF form) -> f form) d
 
 --
 data FormMeta = Disabled
@@ -82,7 +110,7 @@ apFT :: forall t v m a b. FormTree t v m (b -> a) -> FormTree t v m b -> FormTre
 apFT f x = Ap (day ($) f x)
 
 -- Helper for the FormTree Show instance
-showForm :: forall v m a. FormTree Identity v m a -> List String
+showForm :: forall v m a. Form' v m a -> List String
 showForm form = case form of
   Ref r x ->
     ("Ref " <> show r) : (map indent (showForm x))
@@ -123,15 +151,19 @@ transform f x = mapFT f x
 monadic :: forall v m a. m (Form v m a) -> Form v m a
 monadic = Monadic
 
+-- | Build a field form the form
+field :: forall t v m a . Field v a -> FormTree t v m a
+field = Pure
+
 bindV :: forall v m a b. Monad m => m (V v a) -> (a -> m (V v b)) -> m (V v b)
 bindV m f = m >>= unV (pure <<< invalid) f
 
 -- | Normalize a Form to allow operations on the contents
-toFormTree :: forall v m a. Monad m => Form v m a -> m (FormTree Identity v m a)
+toFormTree :: forall v m a. Monad m => Form v m a -> m (Form' v m a)
 toFormTree (Ref r x) = map (Ref r) (toFormTree x)
 toFormTree (Pure x) = pure (Pure x)
 toFormTree (Ap d) =
-  runDay (\i x y -> day i <$> (toFormTree x) <*> (toFormTree y) <#> Ap) d
+  runDay (\i x y -> day i <$> toFormTree x <*> toFormTree y <#> Ap) d
 toFormTree (Map d) = runExists (\(MapF f x) -> map (mapFT f) (toFormTree x)) d
 toFormTree (Monadic x) = x >>= toFormTree >>= pure <<< Monadic <<< Identity
 toFormTree (FormList d) =
@@ -142,7 +174,7 @@ toFormTree (FormList d) =
 toFormTree (Metadata m x) = map (Metadata m) (toFormTree x)
 
 -- | Returns the topmost untransformed single field, if one exists
-toField :: forall v m a. FormTree Identity v m a -> Maybe (SomeField v)
+toField :: forall v m a. Form' v m a -> Maybe (SomeField v)
 toField (Ref _ x)      = toField x
 toField (Pure x)       = Just (someField x)
 toField (Ap _)         = Nothing
@@ -153,7 +185,7 @@ toField (Metadata _ x) = toField x
 
 -- | Returns the topmost applicative or index trees if either exists
 -- otherwise returns an empty list
-children :: forall v m a. FormTree Identity v m a -> List (SomeForm v m)
+children :: forall v m a. Form' v m a -> List (SomeForm v m)
 children (Ref _ x) = children x
 children (Pure x) = Nil
 children (Ap d) = runDay (\_ x y -> (someForm x : someForm y : Nil)) d
@@ -169,7 +201,7 @@ pushRef = Ref
 infixr 5 pushRef as .:
 
 -- Return topmost label of the tree if it exists, with the rest of the form
-popRef :: forall v m a. FormTree Identity v m a -> Tuple (Maybe String) (FormTree Identity v m a)
+popRef :: forall v m a. Form' v m a -> Tuple (Maybe String) (Form' v m a)
 popRef form = case form of
   Ref r x ->
     Tuple (Just r) x
@@ -190,10 +222,10 @@ popRef form = case form of
       Tuple r (Metadata m form')
 
 -- | Return the first/topmost label of a form
-getRef :: forall v m a. FormTree Identity v m a -> Maybe String
+getRef :: forall v m a. Form' v m a -> Maybe String
 getRef = fst <<< popRef
 
-getMetadata :: forall v m a. FormTree Identity v m a -> List FormMeta
+getMetadata :: forall v m a. Form' v m a -> List FormMeta
 getMetadata (Map d) = runExists (\(MapF _ x) -> getMetadata x) d
 getMetadata (Monadic x) = getMetadata $ unwrap x
 getMetadata (Metadata m x) = m <> getMetadata x
@@ -201,13 +233,11 @@ getMetadata _ = Nil
 
 --------------------------------------------------------------------------------
 -- | Retrieve the form(s) at the given path
-lookupForm :: forall v m a. Path -> FormTree Identity v m a -> List (SomeForm v m)
+lookupForm :: forall v m a. Path -> Form' v m a -> List (SomeForm v m)
 lookupForm path = map fst <<< lookupFormMetadata path
 
 --
-lookupFormMetadata
-  :: forall v m a.
-     Path -> FormTree Identity v m a -> List (Tuple (SomeForm v m) (List FormMeta))
+lookupFormMetadata :: forall v m a. Path -> Form' v m a -> List (Tuple (SomeForm v m) (List FormMeta))
 lookupFormMetadata path = go Nil path <<< someForm
   where
     go md path' (SomeForm form') =
@@ -223,7 +253,7 @@ lookupFormMetadata path = go Nil path <<< someForm
               Tuple Nothing _        -> children form >>= go (getMetadata form <> md) (r : rs)) form'
 
 
-formMapV :: forall v w m a. Monad m => (v -> w) -> FormTree Identity v m a -> FormTree Identity w m a
+formMapV :: forall v w m a. Monad m => (v -> w) -> Form' v m a -> Form' w m a
 formMapV f (Ref r x) = Ref r $ formMapV f x
 formMapV f (Pure x)  = Pure (fieldMapV f x)
 formMapV f (Ap d)    = runDay (\i x y -> Ap $ day i (formMapV f x) (formMapV f y)) d
@@ -244,20 +274,20 @@ ann path =
 
 eval
   :: forall v m a. Monad m
-  => Method -> Env m -> FormTree Identity v m a
+  => Method -> Env m -> Form' v m a
   -> m (Tuple (V (List (Tuple Path v)) a) (List (Tuple Path FormInput)))
 eval = eval' Nil
 
 eval'
   :: forall v m a. Monad m
-  => Path -> Method -> Env m -> FormTree Identity v m a
+  => Path -> Method -> Env m -> Form' v m a
   -> m (Tuple (V (List (Tuple Path v)) a) (List (Tuple Path FormInput)))
 eval' path method env form = case form of
   Ref r x -> eval' (path <> (r : Nil)) method env x
 
-  Pure field -> do
+  Pure fi -> do
     val <- env path
-    let x = evalField method val field
+    let x = evalField method val fi
     pure $ Tuple (pure x) $ do
       v <- val
       pure (Tuple path v)

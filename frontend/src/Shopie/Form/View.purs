@@ -11,14 +11,13 @@ import Data.Either (Either(..))
 import Data.Foldable (intercalate)
 import Data.Maybe (Maybe(..))
 import Data.List (List(Nil), (:))
-import Data.Identity (Identity)
 import Data.Tuple (Tuple(Tuple))
 import Data.Profunctor.Strong (second)
 import Data.Validation.Semigroup(unV)
 
 import Shopie.Form.Types (Env, FormInput, Path, Method(..))
 import Shopie.Form.Internal.Encoding (FormEncType, formTreeEncType)
-import Shopie.Form.Internal.Form (FormTree, Form, eval, toFormTree)
+import Shopie.Form.Internal.Form (Form, Form', eval, toFormTree)
 
 
 newtype View v = View
@@ -57,7 +56,7 @@ instance showView :: Show v => Show (View v) where
 
 getForm
   :: forall v m a. Monad m
-  => String -> Form v m a -> m (Tuple (FormTree Identity v m a) (View v))
+  => String -> Form v m a -> m (Tuple (Form' v m a) (View v))
 getForm name form = do
   form' <- toFormTree form
   pure $ Tuple form' $ mkView name Nil Nil Nil Get
@@ -65,7 +64,7 @@ getForm name form = do
 postForm
   :: forall v m a. Monad m
   => String -> Form v m a -> (FormEncType -> m (Env m))
-  -> m (Tuple (Tuple (FormTree Identity v m a) (View v)) (Maybe a))
+  -> m (Tuple (Tuple (Form' v m a) (View v)) (Maybe a))
 postForm name form makeEnv = do
   form' <- toFormTree form
   env <- makeEnv $ formTreeEncType form'

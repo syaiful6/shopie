@@ -1,15 +1,18 @@
-module Shopie.Form.Internal.Encoding where
+module Shopie.Form.Internal.Encoding
+  ( FormEncType(..)
+  , fieldEncType
+  , fieldList
+  , formTreeEncType
+  ) where
 
 import Prelude
 
-import Data.Identity (Identity)
-import Data.Exists (runExists)
 import Data.Foldable (foldr)
 import Data.List (List, (:), concatMap, mapMaybe)
 import Data.Monoid (class Monoid, mempty)
 
-import Shopie.Form.Internal.Field (Field(File), SomeField(..), SomeFieldF(..))
-import Shopie.Form.Internal.Form (FormTree, SomeForm(..), SomeFormF(..), someForm, toField, children)
+import Shopie.Form.Internal.Field (Field, SomeField, isFile, runSomeField)
+import Shopie.Form.Internal.Form (Form', someForm, runSomeForm, toField, children)
 
 
 data FormEncType = UrlEncoded | MultiPart
@@ -28,18 +31,13 @@ instance monoidFormEncType :: Monoid FormEncType where
   mempty = UrlEncoded
 
 fieldEncType :: forall v a. Field v a -> FormEncType
-fieldEncType (File _) = MultiPart
-fieldEncType _ = UrlEncoded
+fieldEncType fi = if isFile fi then MultiPart else UrlEncoded
 
-fieldList :: forall v m a. FormTree Identity v m a -> List (SomeField v)
+fieldList :: forall v m a. Form' v m a -> List (SomeField v)
 fieldList = mapMaybe toField' <<< fieldList' <<< someForm
   where
-    fieldList' (SomeForm d) =
-      runExists (\(SomeFormF fld) -> someForm fld : concatMap fieldList' (children fld)) d
-    toField' (SomeForm d) =
-      runExists (\(SomeFormF fld) -> toField fld) d
+    fieldList' = runSomeForm (\fi -> someForm fi : concatMap fieldList' (children fi))
+    toField' = runSomeForm toField
 
-formTreeEncType :: forall v m a. FormTree Identity v m a -> FormEncType
-formTreeEncType = foldr append mempty <<< map fieldEncType' <<< fieldList
-  where
-    fieldEncType' (SomeField d) = runExists (\(SomeFieldF fld) -> fieldEncType fld) d
+formTreeEncType :: forall v m a. Form' v m a -> FormEncType
+formTreeEncType = foldr append mempty <<< map (runSomeField fieldEncType) <<< fieldList
