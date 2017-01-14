@@ -5,18 +5,16 @@ import Prelude
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE, log)
 
-import Data.List (List(Nil), (:), filter)
+import Data.List (List(Nil), (:))
 import Data.NonEmpty (NonEmpty, (:|))
 import Data.Maybe (Maybe(..))
-import Data.Tuple (Tuple(..), snd, fst)
+import Data.Tuple (Tuple(..), snd)
 import Data.String as S
 
 import Control.Monad.Reader (Reader, runReader, ask)
 
-import Shopie.Form.Formlet ((.:), FormEncType, Form, Formlet, monadic, choice,
-                            choiceWith, text, check)
-import Shopie.Form.Types (Env, FormInput(TextInput), fromPath)
-import Shopie.Form.View (postForm)
+import Shopie.Form.Formlet ((.:), Form, Formlet, monadic, choice, choiceWith, text, check)
+import Shopie.Form.View (runFormPure)
 
 data TransMode
   = Air
@@ -114,10 +112,6 @@ travelerForm def = { name: _, destination: _, trans: _, transMode: _}
   <*> "transMode"     .: transModeForm
   <#> Traveller
 
-testEnv :: forall m. Monad m => List (Tuple String String) -> FormEncType -> m (Env m)
-testEnv input ec = pure $ \key -> pure $ map (TextInput <<< snd) $
-  filter (eq (fromPath key) <<< fst) input
-
 testCase :: forall a b eff. (Show a, Eq b, Show b) => a -> b -> b -> Eff (console :: CONSOLE | eff) Unit
 testCase name expect actual =
   if expect == actual
@@ -135,7 +129,7 @@ main = do
        })
 
   testCase "Simple postForm" (Just aryaW) $
-    snd $ runTravelM $ postForm "f" (travelerForm Nothing) $ testEnv
+    snd $ runTravelM $ runFormPure "f" (travelerForm Nothing) $
       ( Tuple "f.name" "Arya Wiraraja"
       : Tuple "f.destination" "Nangka"
       : Tuple "f.trans" "train-al"
@@ -144,7 +138,7 @@ main = do
       )
 
   testCase "Invalid post data" Nothing $
-    snd $ runTravelM $ postForm "f" (travelerForm Nothing) $ testEnv
+    snd $ runTravelM $ runFormPure "f" (travelerForm Nothing) $
       ( Tuple "f.name" ""
       : Tuple "f.destination" ""
       : Tuple "f.trans" "train-al"

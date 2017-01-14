@@ -1,8 +1,10 @@
 module Shopie.Form.View
   ( View(..)
   , mkView
-  , getForm
   , postForm
+  , runFormPure
+  , viewStrError
+  , module ExposeIntern
   ) where
 
 import Prelude
@@ -10,14 +12,15 @@ import Prelude
 import Data.Either (Either(..))
 import Data.Foldable (intercalate)
 import Data.Maybe (Maybe(..))
-import Data.List (List(Nil), (:))
-import Data.Tuple (Tuple(Tuple))
-import Data.Profunctor.Strong (second)
+import Data.List (List(Nil), (:), filter)
+import Data.Tuple (Tuple(Tuple), fst, snd)
+import Data.Profunctor.Strong (first, second)
 import Data.Validation.Semigroup(unV)
 
-import Shopie.Form.Types (Env, FormInput, Path, Method(..))
+import Shopie.Form.Types (Env, FormInput(TextInput), Path, Method(..), fromPath)
 import Shopie.Form.Internal.Encoding (FormEncType, formTreeEncType)
-import Shopie.Form.Internal.Form (Form, Form', eval, toFormTree)
+import Shopie.Form.Internal.Form (toFormTree) as ExposeIntern
+import Shopie.Form.Internal.Form (Form, eval, toFormTree)
 
 
 newtype View v = View
@@ -29,8 +32,8 @@ newtype View v = View
   }
 
 instance functorView :: Functor View where
-  map f (View r) =
-    View $ r { viewErrors = map (second f) r.viewErrors }
+  map f (View r@{ viewErrors }) =
+    View $ r { viewErrors = map (second f) viewErrors }
 
 mkView
   :: forall v. String -> Path -> List (Tuple Path FormInput)
@@ -54,21 +57,26 @@ instance showView :: Show v => Show (View v) where
       ,  show r.viewMethod
       ])
 
-getForm
-  :: forall v m a. Monad m
-  => String -> Form v m a -> m (Tuple (Form' v m a) (View v))
-getForm name form = do
-  form' <- toFormTree form
-  pure $ Tuple form' $ mkView name Nil Nil Nil Get
-
 postForm
   :: forall v m a. Monad m
   => String -> Form v m a -> (FormEncType -> m (Env m))
-  -> m (Tuple (Tuple (Form' v m a) (View v)) (Maybe a))
+  -> m (Tuple (View v) (Maybe a))
 postForm name form makeEnv = do
   form' <- toFormTree form
   env <- makeEnv $ formTreeEncType form'
   let env' = env <<< ((:) name)
   eval Post env' form' >>= \(Tuple r inp) -> pure $ case unV Left Right r of
-    Left err -> Tuple (Tuple form' $ mkView name Nil inp err Get) Nothing
-    Right x -> Tuple (Tuple form' $ mkView name Nil inp Nil Post) (Just x)
+    Left err -> Tuple (mkView name Nil inp err Get) Nothing
+    Right x -> Tuple (mkView name Nil inp Nil Post) (Just x)
+
+runFormPure
+  :: forall v m a. Monad m
+  => String -- form name
+  -> Form v m a -- form
+  -> List (Tuple String String) -- the static env
+  -> m (Tuple (View v) (Maybe a))
+runFormPure name form input = postForm name form \_ -> pure $ \key ->
+  pure $ map (TextInput <<< snd) $ filter (eq (fromPath key) <<< fst) input
+
+viewStrError :: forall v. View v -> List (Tuple String v)
+viewStrError (View { viewErrors }) = first fromPath <$> viewErrors

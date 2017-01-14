@@ -1,0 +1,48 @@
+module Shopie.Form.Halogen
+  ( runFormH
+  , runFormH'
+  , alter'
+  , alter
+  ) where
+
+import Prelude
+
+import Data.Map as M
+import Data.Maybe (Maybe)
+import Data.Tuple (Tuple)
+
+import Halogen as H
+
+import Shopie.Form.View (View, runFormPure)
+import Shopie.Form.Internal.Form (Form)
+
+
+type State s = { form :: M.Map String String | s}
+type ErrorM s = { errors :: M.Map String String | s }
+
+runFormH
+  :: forall v s f g a. String -> Form v (H.ComponentDSL (State s) f g) a
+  -> H.ComponentDSL (State s) f g (Tuple (View v) (Maybe a))
+runFormH name form =
+  H.gets (M.toUnfoldable <<< _.form) >>= runFormPure name form
+
+runFormH'
+  :: forall v s s' f f' g p a. String
+  -> Form v (H.ParentDSL (State s) s' f f' g p) a
+  -> H.ParentDSL (State s) s' f f' g p (Tuple (View v) (Maybe a))
+runFormH' name form =
+  H.gets (M.toUnfoldable <<< _.form) >>= runFormPure name form
+
+alter :: forall s f g. Boolean -> String -> String -> H.ComponentDSL (ErrorM s) f g Unit
+alter pred path message =
+  let upd = if pred then M.delete path else M.insert path message
+  in
+    H.modify (\r -> r { errors = upd r.errors })
+
+alter'
+  :: forall s s' f f' g p. Boolean -> String -> String
+  -> H.ParentDSL (ErrorM s) s' f f' g p Unit
+alter' pred path message =
+  let upd = if pred then M.delete path else M.insert path message
+  in
+    H.modify (\r -> r { errors = upd r.errors })

@@ -28,7 +28,7 @@ import Data.Validation.Semigroup(V, invalid)
 
 import Shopie.Form.Internal.Field as IF
 import Shopie.Form.Internal.Form as FO
-import Shopie.Form.Internal.Form (Form, FormTree, (.:), monadic) as ExposeForm
+import Shopie.Form.Internal.Form (Form, Form', FormTree, (.:), monadic) as ExposeForm
 import Shopie.Form.Internal.Encoding (FormEncType(..)) as ExposeEnc
 import Shopie.Form.Types (FilePath, Nel)
 
