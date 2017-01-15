@@ -35,7 +35,7 @@ import Shopie.Form.Types (FilePath, Nel)
 
 type Formlet v m a = Maybe a -> FO.Form v m a
 
-text :: forall v m. (Monad m, Semigroup v) => Formlet v m String
+text :: forall v m. Formlet v m String
 text def = FO.field $ IF.text $ fromMaybe "" def
 
 choice
@@ -58,11 +58,11 @@ choiceWith'
 choiceWith' (default':|items) def =
   fromMaybe defaultItem <<< head <<< map fst <$> (FO.field (IF.choice (Tuple "" merged : Nil) def'))
   where
-    merged = (default' : items)
+    merged = default' : items
     defaultItem = fst $ snd $ default'
     def' = case def of
-      Just x  -> (x : Nil)
-      Nothing -> (0 : Nil)
+      Just x  -> x : Nil
+      Nothing -> 0 : Nil
 
 choiceMultiple
   :: forall v m a. (Eq a, Monad m, Semigroup v)
@@ -88,7 +88,7 @@ choiceWithMultiple' items def = map fst <$> (FO.field $ IF.choice ((Tuple "" ite
       Just x -> x
       Nothing -> Nil
 
-bool :: forall v m. (Monad m, Semigroup v) => Formlet v m Boolean
+bool :: forall v m. Formlet v m Boolean
 bool = FO.field <<< IF.bool <<< fromMaybe false
 
 file :: forall v m. (Monad m, Semigroup v) => FO.Form v m (Maybe FilePath)

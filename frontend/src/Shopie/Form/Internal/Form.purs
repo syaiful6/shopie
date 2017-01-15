@@ -46,7 +46,7 @@ import Data.Tuple (Tuple(Tuple), fst)
 import Data.Validation.Semigroup(V, unV, invalid)
 
 import Shopie.Form.Internal.Field (Field, SomeField, evalField, someField,
-                                   fieldMapV, singleton)
+  fieldMapV, singleton)
 import Shopie.Form.Types (Env, FormInput, Method, Path)
 
 
@@ -260,8 +260,7 @@ formMapV f (Map d)   = runExists (\(MapF g x) -> mapFT (g >=> pure <<< lmap f) (
 formMapV f (Monadic x) = formMapV f $ unwrap x
 formMapV f (FormList x) =
   runExists (\(FormListF d is p) ->
-    FormList (mkExists (FormListF (map (formMapV f) d) (formMapV f is) p))
-  ) x
+    FormList (mkExists (FormListF (map (formMapV f) d) (formMapV f is) p))) x
 formMapV f (Metadata m x) = Metadata m $ formMapV f x
 
 ann :: forall v a. Path -> V v a -> V (List (Tuple Path v)) a
@@ -277,42 +276,39 @@ eval'
   :: forall v m a. Monad m
   => Path -> Method -> Env m -> Form' v m a
   -> m (Tuple (V (List (Tuple Path v)) a) (List (Tuple Path FormInput)))
-eval' path method env form = case form of
-  Ref r x -> eval' (path <> (r : Nil)) method env x
+eval' p met env = case _ of
+  Ref r x -> eval' (p <> (r : Nil)) met env x
 
   Pure fi ->
-    (pure <<< flip (evalField method) fi &&& (_ >>= pure <<< Tuple path))
-    <$> env path
+    (pure <<< flip (evalField met) fi &&& (_ >>= pure <<< Tuple p)) <$> env p
 
   Ap d ->
     runDay (\i x y ->
-      biapply <<< (lift2 i *** append)
-      <$> eval' path method env x
-      <*> eval' path method env y) d
+      biapply <<< (lift2 i *** append) <$> eval' p met env x <*> eval' p met env y) d
 
   Map d ->
     runExists (\(MapF f x) -> do
-      Tuple x' inp <- eval' path method env x
-      x_ <- bindV (pure x') (f >=> pure <<< ann path)
+      Tuple x' inp <- eval' p met env x
+      x_ <- bindV (pure x') (f >=> pure <<< ann p)
       pure (Tuple x_ inp)) d
 
   Monadic x ->
-    eval' path method env $ unwrap x
+    eval' p met env $ unwrap x
 
   FormList d ->
     runExists (\(FormListF defs fis proof) -> do
-      Tuple ris inp1 <- eval' path method env fis
+      Tuple ris inp1 <- eval' p met env fis
       let ris' = unV Left Right ris
       case ris' of
         Left err -> pure (Tuple (invalid err) inp1)
         Right is ->
           (map (coerceSymm proof) <<< sequence *** append inp1 <<< concat) <<< unzip
           <$> traverse
-            (\i -> eval' (path <> ((show i) : Nil))
-                            method env $ defs `defaultListIndex` i) is) d
+            (\i -> eval' (p <> ((show i) : Nil))
+                            met env $ defs `defaultListIndex` i) is) d
 
   Metadata _ x ->
-    eval' path method env x
+    eval' p met env x
 
 forOptional :: forall v b a. Semigroup v => (a -> V v b) -> Maybe a -> V v (Maybe b)
 forOptional f = maybe (pure Nothing) (unV invalid (pure <<< pure) <<< f)
