@@ -23,7 +23,7 @@ import Shopie.Button.Spinner (SpinnerS, SpinnerQuery(..), SpinnerSlot(..), spinn
 import Shopie.Form ((.:), Form, text, check, viewStrError)
 import Shopie.Form.Halogen as FH
 import Shopie.ShopieM (class NotifyQ, Shopie, Wiring(..), notifyError, forgotten, notifyInfo)
-import Shopie.Utils.Error (censorMF)
+import Shopie.Utils.Error (censorMF, printError)
 
 
 data LoginQuery a
@@ -100,7 +100,7 @@ loginForm st@{ form } =
         [ HH.span
           [ HP.class_ $ HH.className "input-icon icon-mail" ]
           [ HH.input
-              [ HP.class_ $ HH.className ("sh-input email" <> ("login.email" `existE` st.errors))
+              [ HP.class_ $ HH.className ("sh-input email" <> ("login.email" `printError` st.errors))
               , HP.inputType HP.InputEmail
               , HP.placeholder "Email Address"
               , HP.value $ fromMaybe "" $ M.lookup "login.email" form
@@ -113,7 +113,7 @@ loginForm st@{ form } =
         [ HH.span
           [ HP.class_ $ HH.className "input-icon icon-lock forgotten-wrap" ]
           [ HH.input
-              [ HP.class_ $ HH.className ("sh-input password" <> ("login.passwords" `existE` st.errors))
+              [ HP.class_ $ HH.className ("sh-input password" <> ("login.passwords" `printError` st.errors))
               , HP.inputType HP.InputPassword
               , HP.placeholder "Passwords"
               , HP.value $ fromMaybe "" $ M.lookup "login.passwords" form
@@ -131,37 +131,32 @@ renderSpinner sl text c =
   HH.slot (SpinnerSlot sl) \_ ->
     { component: spinner, initialState: text `mkSpinner` c }
 
--- | Return " error" if the given key exists on a given map
-existE :: forall k v. Ord k => k -> M.Map k v -> String
-existE k m = maybe "" (const " error") $ M.lookup k m
-
 eval :: LoginQuery ~> LoginDSL
 eval (UpdateEmail em n) =
   FH.alter' (EV.isValid em) "login.email" "Invalid email"
-  *> H.modify (\r -> r { form = M.insert "login.email" em r.form })
-  $> n
+  *> H.modify (\r -> r { form = M.insert "login.email" em r.form }) $> n
 eval (UpdatePasswords p n) =
   FH.alter' (not (S.null p)) "login.passwords" "Please enter your passwords"
-  *> H.modify (\r -> r { form = M.insert "login.passwords" p r.form })
-  $> n
+  *> H.modify (\r -> r { form = M.insert "login.passwords" p r.form }) $> n
 
 peek :: forall a. H.ChildF SpinnerSlot SpinnerQuery a -> LoginDSL Unit
 peek (H.ChildF p q) = case q, p of
   Submit _, SpinnerSlot "spinner-f" ->
     censorMF (runMaybeT handleForgotP) $ do
       errorN "(Error), Make sure enter valid email address." 10000.00
-      H.query p (H.action (ToggleSpinner false)) $> unit
+      toggleSpinner $> unit
   Submit _, SpinnerSlot "spinner-l" -> do
     v <- FH.runFormH' "login" loginForm'
     case v of
       Tuple _ (Just d) ->
-        runMaybeT (handleLogin d)
-        *> H.query p (H.action (ToggleSpinner false)) $> unit
+        handleLogin d *> toggleSpinner $> unit
       Tuple view Nothing ->
         H.modify (_ { errors = M.fromFoldable (viewStrError view) })
-        *> H.query p (H.action (ToggleSpinner false)) $> unit
+        *> toggleSpinner $> unit
   _, _ ->
     pure unit
+  where
+    toggleSpinner = H.query p (H.action (ToggleSpinner false))
 
 -- Handle forgotten passwords button
 handleForgotP :: MaybeT LoginDSL Unit
@@ -180,7 +175,7 @@ handleForgotP = do
   lift $ H.set initialState
   infoN ("Email sent! Check your inbox in " <> em') 10000.00
 
-handleLogin :: Creds -> MaybeT LoginDSL Unit
+handleLogin :: Creds -> LoginDSL Unit
 handleLogin cred = do
   res' <- authenticate cred
   case res' of

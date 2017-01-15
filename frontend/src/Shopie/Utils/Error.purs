@@ -7,6 +7,7 @@ import Control.Monad.Except.Trans (ExceptT(..))
 
 import Data.Bifunctor (bimap)
 import Data.Either (Either, either)
+import Data.Map as M
 import Data.Maybe (Maybe, maybe)
 
 
@@ -52,3 +53,6 @@ recoverM h me = recover h =<< me
 
 recoverMF :: forall m a b. Monad m => m (Either b a) -> (b -> m a) -> m a
 recoverMF = flip recoverM
+
+printError :: forall k v. Ord k => k -> M.Map k v -> String
+printError k = maybe "" (const " error") <<< M.lookup k

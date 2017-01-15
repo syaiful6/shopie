@@ -12,6 +12,7 @@ import Control.Monad.Free (Free, liftF)
 import Control.Monad.Rec.Class (tailRecM, Step(..))
 
 import Qyson.ConfigF as QC
+import Qyson.QysonF (QysonF)
 
 import Shopie.Auth.AuthF as AT
 import Shopie.Auth.Types (Email, TokenId)
@@ -37,7 +38,7 @@ instance functorShopieF :: Functor (ShopieF eff) where
     Fork fa -> Fork (map f fa)
     Notify n a -> Notify n (f a)
 
-type ShopieFC eff = Coproduct (QC.ConfigF Wiring) (Coproduct AT.AuthF (ShopieF eff))
+type ShopieFC eff = Coproduct (QC.ConfigF Wiring) (Coproduct AT.AuthF (Coproduct QysonF (ShopieF eff)))
 
 newtype ShopieM eff a = ShopieM (Free (ShopieFC eff) a)
 
@@ -64,26 +65,26 @@ instance monadRecShopieM :: MonadRec (ShopieM eff) where
     go (Done y) = pure y
 
 instance monadEffShopieM :: MonadEff eff (ShopieM eff) where
-  liftEff = ShopieM <<< liftF <<< right <<< right <<< Aff <<< liftEff
+  liftEff = ShopieM <<< liftF <<< right <<< right <<< right <<< Aff <<< liftEff
 
 instance monadAffShopieM :: MonadAff eff (ShopieM eff) where
-  liftAff = ShopieM <<< liftF <<< right <<< right <<< Aff <<< liftAff
+  liftAff = ShopieM <<< liftF <<< right <<< right <<< right <<< Aff <<< liftAff
 
 instance affableShopieM :: Affable eff (ShopieM eff) where
-  fromAff = ShopieM <<< liftF <<< right <<< right <<< Aff
+  fromAff = ShopieM <<< liftF <<< right <<< right <<< right <<< Aff
 
 instance parallelShopieM :: Parallel (ShopieAp eff) (ShopieM eff) where
   parallel = ShopieAp <<< liftAp
-  sequential = ShopieM <<< liftF <<< right <<< right <<< Par
+  sequential = ShopieM <<< liftF <<< right <<< right <<< right <<< Par
 
 instance monadForkShopieM :: MonadAff eff m => MonadFork Error (ShopieM eff) where
-  fork a = map liftAff <$> ShopieM (liftF $ right $ right $ Fork $ SF.fork a)
+  fork a = map liftAff <$> ShopieM (liftF $ right $ right $ right $ Fork $ SF.fork a)
 
 instance monadAskShopieM :: MonadAsk Wiring (ShopieM eff) where
   ask = ShopieM $ liftF $ left $ QC.configF id
 
 instance notifyQShopieM :: NotifyQ (ShopieM eff) where
-  notify = ShopieM <<< liftF <<< right <<< right <<< flip Notify unit
+  notify = ShopieM <<< liftF <<< right <<< right <<< right <<< flip Notify unit
 
 instance authDSLShopieM :: AuthDSL (ShopieM eff) where
   authenticate = ShopieM <<< liftF <<< right <<< left <<< AT.authenticateF
@@ -104,3 +105,6 @@ forgotten = ShopieM <<< liftF <<< right <<< left <<< AT.forgottenF
 
 getAuthTokenId :: forall eff. ShopieM eff (Maybe TokenId)
 getAuthTokenId = ShopieM $ liftF $ right $ left $ AT.getAuthTokenId
+
+liftQyson :: forall eff. QysonF ~> ShopieM eff
+liftQyson = ShopieM <<< liftF <<< right <<< right <<< left
