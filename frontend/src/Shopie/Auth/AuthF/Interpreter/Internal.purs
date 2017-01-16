@@ -9,7 +9,7 @@ import Control.Monad.Eff.Exception (Error, error)
 import Control.Monad.Free (Free, liftF)
 import Control.Monad.Eff.Now (NOW)
 
-import Data.Argonaut (decodeJson, jsonParser, encodeJson, printJson)
+import Data.Argonaut (decodeJson, jsonParser, encodeJson)
 import Data.List as L
 import Data.StrMap as SM
 
@@ -69,7 +69,7 @@ persistBearerToken
   . String
   -> BearerToken
   -> Free (Coproduct a (Coproduct b (Coproduct SF.StorageF c))) Unit
-persistBearerToken k = persist k <<< printJson <<< encodeJson
+persistBearerToken k = persist k <<< show <<< encodeJson
 
 restoreBearerToken
   :: forall a b c

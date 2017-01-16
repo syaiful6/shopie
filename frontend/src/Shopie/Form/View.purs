@@ -4,6 +4,8 @@ module Shopie.Form.View
   , postForm
   , runFormPure
   , viewStrError
+  , classifiy
+  , classifiy'
   , module ExposeIntern
   ) where
 
@@ -13,6 +15,7 @@ import Data.Either (Either(..))
 import Data.Foldable (intercalate)
 import Data.Maybe (Maybe(..))
 import Data.List (List(Nil), (:), filter)
+import Data.String as S
 import Data.Tuple (Tuple(Tuple), fst, snd)
 import Data.Profunctor.Strong (first, second)
 import Data.Validation.Semigroup(unV)
@@ -80,3 +83,9 @@ runFormPure name form input = postForm name form \_ -> pure $ \key ->
 
 viewStrError :: forall v. View v -> List (Tuple String v)
 viewStrError (View { viewErrors }) = first fromPath <$> viewErrors
+
+classifiy :: Path -> String
+classifiy = intercalate "-"
+
+classifiy' :: String -> String
+classifiy' = S.replace (S.Pattern ".") (S.Replacement "-")

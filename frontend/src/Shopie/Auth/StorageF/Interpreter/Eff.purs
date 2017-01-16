@@ -13,7 +13,7 @@ import DOM (DOM)
 
 eval :: forall eff. StorageF ~> Eff (dom :: DOM | eff)
 eval (Persist k v next) =
-  US.setSessionStorage k v $> next
+  US.setLocalStorage k v $> next
 
 eval (Restore key kon) =
   kon <<< hush <$> US.getLocalStorage key

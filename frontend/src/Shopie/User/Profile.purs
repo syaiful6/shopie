@@ -14,6 +14,7 @@ import Halogen.HTML.Events.Handler as HEH
 import Text.Email.Validate as EV
 
 import Shopie.Form ((.:), Form, text, check, viewStrError)
+import Shopie.Form.View (classify')
 import Shopie.Form.DOM (runForm)
 import Shopie.ShopieM (Shopie)
 import Shopie.User.Model (User, UserAttributes, user, unAttr)
@@ -85,7 +86,8 @@ renderHeader u =
     ]
 
 inputCls :: String -> M.Map String String -> String
-inputCls p e = p <> "sh-input" <> (p `printError` e)
+inputCls p e =
+  classify' p <> " sh-input" <> (p `printError` e)
 
 renderForm :: Profile -> H.ComponentHTML ProfileQ
 renderForm u@{ errors } =
@@ -110,10 +112,10 @@ renderForm u@{ errors } =
         , HH.div
             [ HP.class_ $ HH.className "first-form-group form-group" ]
             [ HH.label
-                [ HP.for "profile.username" ]
+                [ HP.for "profile-username" ]
                 [ HH.text "User Name" ]
             , HH.input
-                [ HP.id_ "profile.username"
+                [ HP.id_ "profile-username"
                 , HP.class_ $ HH.className (inputCls "profile.username" errors)
                 , HP.placeholder "User name"
                 , HP.value u.username
@@ -125,10 +127,10 @@ renderForm u@{ errors } =
             [ HH.div
                 [ HP.class_ $ HH.className "form-group" ]
                 [ HH.label
-                    [ HP.for "profile.firstName" ]
-                    [ HH.text "profile.firstName" ]
+                    [ HP.for "profile-firstName" ]
+                    [ HH.text "First Name" ]
                 , HH.input
-                    [ HP.id_ "profile.firstName"
+                    [ HP.id_ "profile-firstName"
                     , HP.class_ $ HH.className (inputCls "profile.firstName" errors)
                     , HP.placeholder "First name"
                     , HP.value u.firstName
@@ -138,26 +140,26 @@ renderForm u@{ errors } =
             , HH.div
                 [ HP.class_ $ HH.className "form-group" ]
                 [ HH.label
-                    [ HP.for "profile.lastName" ]
+                    [ HP.for "profile-lastName" ]
                     [ HH.text "Last name" ]
                 , HH.input
-                    [ HP.id_ "profile.lastName"
+                    [ HP.id_ "profile-lastName"
                     , HP.class_ $ HH.className (inputCls "profile.lastName" errors)
                     , HP.placeholder "Last name"
-                    , HP.value u.firstName
+                    , HP.value u.lastName
                     , HE.onValueChange $ HE.input UpdateLastName
                     ]
                 ]
             , HH.div
                 [ HP.class_ $ HH.className "form-group" ]
                 [ HH.label
-                    [ HP.for "profile.email" ]
+                    [ HP.for "profile-email" ]
                     [ HH.text "Email" ]
                 , HH.input
-                    [ HP.id_ "profile.email"
+                    [ HP.id_ "profile-email"
                     , HP.class_ $ HH.className (inputCls "profile.email" errors)
                     , HP.placeholder "User email"
-                    , HP.value u.firstName
+                    , HP.value u.email
                     , HE.onValueChange $ HE.input UpdateEmail
                     ]
                 ]

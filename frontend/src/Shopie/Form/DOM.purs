@@ -8,6 +8,7 @@ import Control.Monad.Eff.Class (class MonadEff, liftEff)
 import Control.Monad.Except (runExcept)
 
 import Data.Either (either)
+import Data.Foldable (intercalate)
 import Data.Foreign (toForeign)
 import Data.List (List(Nil), singleton)
 import Data.Maybe (Maybe(..))
@@ -38,7 +39,7 @@ queryFieldForm query = do
 
 envDOM :: forall m eff. MonadEff (dom :: DOM | eff) m => Env m
 envDOM path = do
-  v <- queryFieldForm ("." <> fromPath path)
+  v <- queryFieldForm ("." <> intercalate "-" path)
   case v of
     Nothing -> pure $ Nil
     Just x ->  liftEff (singleton <<< TextInput <$> value x)

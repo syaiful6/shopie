@@ -6,6 +6,6 @@ module Shopie.ShopieM
   ) where
 
 import Shopie.Effects (ShopieEffects)
-import Shopie.ShopieM.ShopieM (ShopieM(..), ShopieF(..), Shopie, forgotten)
+import Shopie.ShopieM.ShopieM (ShopieM(..), ShopieF(..), Shopie, forgotten, liftQyson, getAuthTokenId)
 import Shopie.ShopieM.Notification (class NotifyQ, notify, notifyInfo, notifyError, notifyWarning)
 import Shopie.Wiring (Wiring(..), makeWiring)

@@ -135,7 +135,7 @@ getUserId (BearerToken t) = do
       { url = basePath <> "/api/v1/users/me/"
       , method = Left GET
       , headers = [ Accept applicationVndJSONApi
-                  , RequestHeader "Authorization" (t.accessToken)
+                  , RequestHeader "Authorization" ("Bearer " <> t.accessToken)
                   ]
       })
 

@@ -2,22 +2,36 @@ module Shopie.Application where
 
 import Shopie.Prelude
 
+import Control.Monad.Aff.Bus as Bus
+import Control.Error.Util (hush)
+
+import Data.Argonaut.Core (Json)
+import Data.Argonaut.Decode (decodeJson)
+import Data.List as L
+import Data.Path.Pathy ((</>), file, dir, rootDir)
+
 import Halogen as H
 import Halogen.Component.ChildPath (ChildPath, cpL, cpR, (:>))
 import Halogen.HTML.Indexed as HH
 import Halogen.HTML.Properties.Indexed as HP
 
+import Network.JsonApi (unDocument, fromResource)
+
+import Shopie.Auth (SignInMessage(..), maybeAuthId)
 import Shopie.Auth.Login as AL
+import Shopie.Halogen.EventSource (raise')
 import Shopie.Notification.List as NL
 import Shopie.Route.Types as RT
-import Shopie.ShopieM (Shopie)
+import Shopie.ShopieM (Shopie, Wiring(..), liftQyson)
 import Shopie.User.Model as UM
 import Shopie.User.Profile as UP
 
+import Qyson.QysonF (readFile, jsonModeApi)
 
 data AppQ a
   = GetRoute (RT.Locations -> a)
   | GetUser (Maybe (UM.User UM.UserAttributes) -> a)
+  | ObserveAuth SignInMessage a
   | Init a
   | Move RT.Locations a
   | UpdateUser (Maybe (UM.User UM.UserAttributes)) a
@@ -129,10 +143,18 @@ renderView RT.NotFound _ =
 
 eval :: AppQ ~> AppDSL
 eval (Init next) = do
-  pure next
+  raiseUserUpdate =<< runMaybeT maybeAuthenticate
+  Wiring { auth } <- H.liftH $ H.liftH ask
+  forever (raise' <<< H.action <<< ObserveAuth =<< H.fromAff (Bus.read auth.signinBus))
+eval (ObserveAuth msg next) = do
+  case msg of
+    SignInSuccess ->
+      (runMaybeT maybeAuthenticate >>= raiseUserUpdate) $> next
+    _ ->
+      pure next
 eval (Move RT.Login next) = do
   u <- H.gets (_.user)
-  unless (isJust u) $ H.modify (_ { route = RT.Login, user = Nothing })
+  unless (isJust u) $ H.modify (_ { route = RT.Login })
   pure next
 eval (Move loc next) = do
   u <- H.gets (_.user)
@@ -142,3 +164,25 @@ eval (UpdateUser u next) =
   H.modify (_ { user = u }) $> next
 eval (GetUser reply) = reply <$> H.gets (_.user)
 eval (GetRoute reply) = reply <$> H.gets (_.route)
+
+raiseUserUpdate :: Maybe Json -> AppDSL Unit
+raiseUserUpdate = case _ of
+  Nothing ->
+    pure unit
+  Just x -> do
+    raise' $ H.action $ UpdateUser (decodeUser x)
+    raise' $ H.action $ Move RT.Profile
+
+maybeAuthenticate :: MaybeT AppDSL Json
+maybeAuthenticate = do
+  i <- MaybeT $ maybeAuthId
+  MaybeT $ hush <$> (H.liftH $ H.liftH $ liftQyson $
+    readFile jsonModeApi loc Nothing)
+  where
+    loc = rootDir </> dir "users" </> dir "me" </> file ""
+
+decodeUser :: Json -> Maybe (UM.User UM.UserAttributes)
+decodeUser js = do
+  d <- hush $ decodeJson js
+  e <- L.head <<< _.resources <<< unDocument =<< d
+  pure $ fromResource e

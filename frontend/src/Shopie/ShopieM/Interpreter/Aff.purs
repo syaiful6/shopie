@@ -60,7 +60,7 @@ runShopieM wiring@(Wiring { auth, notify }) = foldFree go <<< unShopieM
 
     evalQyson :: QysonF ~> Aff (ShopieEffects eff)
     evalQyson =
-      foldFree (coproduct (flip QC.evalAp { basePath: ""}) authify) <<< IAX.eval
+      foldFree (coproduct (flip QC.evalAp { basePath: "/api/v1"}) authify) <<< IAX.eval
 
     authify :: AXF.AffjaxFP RequestContent String ~> Aff (ShopieEffects eff)
     authify ajax@(AXF.AffjaxFP req k) = do

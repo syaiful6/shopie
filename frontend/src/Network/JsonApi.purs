@@ -10,4 +10,5 @@ import Network.JsonApi.Document (Document, UnDocument, mkDocument, mkCompoundDoc
 import Network.JsonApi.Identifier (Identifier(..), class JsonApiIdentifier, identifier)
 import Network.JsonApi.Link (Links(..), mkLinks)
 import Network.JsonApi.Meta (Meta(..))
-import Network.JsonApi.Resource (Resource(..), Relationships, Relationship, mkRelationships, mkRelationship, mkResource)
+import Network.JsonApi.Resource (Resource(..), Relationships, Relationship, mkRelationships, mkRelationship, mkResource,
+  fromResource, toResource)
