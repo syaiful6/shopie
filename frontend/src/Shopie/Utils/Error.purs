@@ -5,6 +5,8 @@ import Prelude
 import Control.Monad.Maybe.Trans (MaybeT(..))
 import Control.Monad.Except.Trans (ExceptT(..))
 
+import Halogen as H
+
 import Data.Bifunctor (bimap)
 import Data.Either (Either, either)
 import Data.Map as M
@@ -56,3 +58,19 @@ recoverMF = flip recoverM
 
 printError :: forall k v. Ord k => k -> M.Map k v -> String
 printError k = maybe "" (const " error") <<< M.lookup k
+
+type ErrorM s = { errors :: M.Map String String | s }
+
+alter :: forall s f g. Boolean -> String -> String -> H.ComponentDSL (ErrorM s) f g Unit
+alter pred path message =
+  let upd = if pred then M.delete path else M.insert path message
+  in
+    H.modify (\r -> r { errors = upd r.errors })
+
+alter'
+  :: forall s s' f f' g p. Boolean -> String -> String
+  -> H.ParentDSL (ErrorM s) s' f f' g p Unit
+alter' pred path message =
+  let upd = if pred then M.delete path else M.insert path message
+  in
+    H.modify (\r -> r { errors = upd r.errors })

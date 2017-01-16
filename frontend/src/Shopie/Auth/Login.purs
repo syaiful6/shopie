@@ -23,7 +23,7 @@ import Shopie.Button.Spinner (SpinnerS, SpinnerQuery(..), SpinnerSlot(..), spinn
 import Shopie.Form ((.:), Form, text, check, viewStrError)
 import Shopie.Form.Halogen as FH
 import Shopie.ShopieM (class NotifyQ, Shopie, Wiring(..), notifyError, forgotten, notifyInfo)
-import Shopie.Utils.Error (censorMF, printError)
+import Shopie.Utils.Error (censorMF, printError, alter')
 
 
 data LoginQuery a
@@ -133,10 +133,10 @@ renderSpinner sl text c =
 
 eval :: LoginQuery ~> LoginDSL
 eval (UpdateEmail em n) =
-  FH.alter' (EV.isValid em) "login.email" "Invalid email"
+  alter' (EV.isValid em) "login.email" "Invalid email"
   *> H.modify (\r -> r { form = M.insert "login.email" em r.form }) $> n
 eval (UpdatePasswords p n) =
-  FH.alter' (not (S.null p)) "login.passwords" "Please enter your passwords"
+  alter' (not (S.null p)) "login.passwords" "Please enter your passwords"
   *> H.modify (\r -> r { form = M.insert "login.passwords" p r.form }) $> n
 
 peek :: forall a. H.ChildF SpinnerSlot SpinnerQuery a -> LoginDSL Unit
@@ -163,7 +163,7 @@ handleForgotP :: MaybeT LoginDSL Unit
 handleForgotP = do
   em' <- MaybeT $ H.gets (M.lookup "login.email" <<< _.form)
   let v = EV.isValid em'
-  lift $ FH.alter' v "login.email" "Invalid email"
+  lift $ alter' v "login.email" "Invalid email"
   -- make sure our validation success
   guard v
   lift $ H.liftH $ H.liftH $ forgotten em'

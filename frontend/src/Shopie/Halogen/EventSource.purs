@@ -6,7 +6,7 @@ module Shopie.Halogen.EventSource where
 
 import Prelude
 
-import Control.Monad.Aff (Canceler, forkAff, later', runAff)
+import Control.Monad.Aff (Aff, Canceler, forkAff, later', runAff)
 import Control.Monad.Aff.AVar (AVAR, AVar, makeVar, putVar, takeVar)
 import Control.Monad.Aff.Free (class Affable)
 import Control.Monad.Eff.Class (liftEff)
@@ -72,3 +72,37 @@ emitOnceEventSource (Milliseconds ms) act c =
   where
     delay = later' (Int.floor $ Math.max ms zero)
     emitAndEnd em = liftEff $ em (Left act) *> em (Right unit)
+
+subscribeAVar
+  :: forall f g a eff
+   . (Affable (avar :: AVAR | eff) g, Functor g)
+  => AVar a
+  -> (a -> H.Action f)
+  -> H.EventSource f g
+subscribeAVar v act =
+  ES.EventSource
+    $ ES.produce \emit ->
+        runAff (\_ -> emit $ Right unit) (\r -> emit $ Left $ act r unit) (takeVar v)
+        $> unit
+
+forkQuery
+  :: forall s f g a eff
+   . (Affable (avar :: AVAR | eff) g, Functor g)
+  => Aff (avar :: AVAR | eff) a
+  -> (a -> H.Action f)
+  -> H.ComponentDSL s f g (Canceler (avar :: AVAR | eff))
+forkQuery aff act = do
+  v <- H.fromAff makeVar
+  canceler <- H.fromAff $ forkAff $ aff >>= putVar v
+  H.subscribe (subscribeAVar v act) $> canceler
+
+forkQuery'
+  :: forall s s' f f' g p a eff
+   . (Affable (avar :: AVAR | eff) g, Functor g)
+  => Aff (avar :: AVAR | eff) a
+  -> (a -> H.Action f)
+  -> H.ParentDSL s s' f f' g p (Canceler (avar :: AVAR | eff))
+forkQuery' aff act = do
+  v <- H.fromAff makeVar
+  canceler <- H.fromAff $ forkAff $ aff >>= putVar v
+  H.subscribe' (subscribeAVar v act) $> canceler

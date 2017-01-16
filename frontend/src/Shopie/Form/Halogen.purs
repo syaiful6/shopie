@@ -1,8 +1,6 @@
 module Shopie.Form.Halogen
   ( runFormH
   , runFormH'
-  , alter'
-  , alter
   ) where
 
 import Prelude
@@ -32,17 +30,3 @@ runFormH'
   -> H.ParentDSL (State s) s' f f' g p (Tuple (View v) (Maybe a))
 runFormH' name form =
   H.gets (M.toUnfoldable <<< _.form) >>= runFormPure name form
-
-alter :: forall s f g. Boolean -> String -> String -> H.ComponentDSL (ErrorM s) f g Unit
-alter pred path message =
-  let upd = if pred then M.delete path else M.insert path message
-  in
-    H.modify (\r -> r { errors = upd r.errors })
-
-alter'
-  :: forall s s' f f' g p. Boolean -> String -> String
-  -> H.ParentDSL (ErrorM s) s' f f' g p Unit
-alter' pred path message =
-  let upd = if pred then M.delete path else M.insert path message
-  in
-    H.modify (\r -> r { errors = upd r.errors })

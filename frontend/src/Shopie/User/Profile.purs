@@ -2,9 +2,8 @@ module Shopie.User.Profile where
 
 import Shopie.Prelude
 
-import Control.Applicative.Lift (Errors, runErrors)
-
 import Data.Map as M
+import Data.String as S
 
 import Halogen as H
 import Halogen.HTML.Indexed as HH
@@ -12,9 +11,13 @@ import Halogen.HTML.Properties.Indexed as HP
 import Halogen.HTML.Events.Indexed as HE
 import Halogen.HTML.Events.Handler as HEH
 
+import Text.Email.Validate as EV
+
+import Shopie.Form ((.:), Form, text, check, viewStrError)
+import Shopie.Form.DOM (runForm)
 import Shopie.ShopieM (Shopie)
 import Shopie.User.Model (User, UserAttributes, user, unAttr)
-import Shopie.Validation as SV
+import Shopie.Utils.Error (alter, printError)
 
 
 data ProfileQ a
@@ -49,21 +52,20 @@ render u =
 
 eval :: ProfileQ ~> H.ComponentDSL Profile ProfileQ Shopie
 eval (UpdateFirstName fn next) =
-  let v = either SV.unionError (SV.deleteError "FirstName") $ runErrors $ SV.nes "FirstName" fn
-  in H.modify (v >>> (_ { firstName = fn })) $> next
+  alter (not (S.null fn)) "profile.firstName" "firstName field cant be empty"
+  *> H.modify (_ { firstName = fn }) $> next
 eval (UpdateLastName ln next) = H.modify (_ { lastName = ln }) $> next
 eval (UpdateEmail email next) =
-  let v = either SV.unionError (SV.deleteError "Email") $ runErrors $ SV.email "Email" email
-  in H.modify (v >>> (_ { email = email })) $> next
+  alter (EV.isValid email) "profile.email" "Invalid email"
+  *> H.modify (_ { email = email }) $> next
 eval (UpdateUsername um next) = H.modify (_ { username = um }) $> next
 eval (Save next) = do
-  v <- H.gets $ map toUser <<< runErrors <<< profileV
+  v <- H.fromEff <<< runForm "profile" =<< profileForm <$> H.gets (_.userId)
   case v of
-    Right u ->
-      -- TODO submit AJAX request
+    Tuple _ (Just p) ->
       pure next
-    Left e ->
-      H.modify (SV.setError e) $> next
+    Tuple vi Nothing ->
+      H.modify (_ { errors = M.fromFoldable (viewStrError vi) }) $> next
 
 renderHeader :: Profile -> H.ComponentHTML ProfileQ
 renderHeader u =
@@ -82,8 +84,11 @@ renderHeader u =
         ]
     ]
 
+inputCls :: String -> M.Map String String -> String
+inputCls p e = p <> "sh-input" <> (p `printError` e)
+
 renderForm :: Profile -> H.ComponentHTML ProfileQ
-renderForm u =
+renderForm u@{ errors } =
   HH.section
     [ HP.class_ $ HH.className "view-container settings-user" ]
     [ HH.figure
@@ -105,11 +110,11 @@ renderForm u =
         , HH.div
             [ HP.class_ $ HH.className "first-form-group form-group" ]
             [ HH.label
-                [ HP.for "user-name" ]
+                [ HP.for "profile.username" ]
                 [ HH.text "User Name" ]
             , HH.input
-                [ HP.id_ "user-name"
-                , HP.class_ $ HH.className "user-name sh-input"
+                [ HP.id_ "profile.username"
+                , HP.class_ $ HH.className (inputCls "profile.username" errors)
                 , HP.placeholder "User name"
                 , HP.value u.username
                 , HE.onValueChange $ HE.input UpdateUsername
@@ -120,11 +125,11 @@ renderForm u =
             [ HH.div
                 [ HP.class_ $ HH.className "form-group" ]
                 [ HH.label
-                    [ HP.for "first-name" ]
-                    [ HH.text "First name" ]
+                    [ HP.for "profile.firstName" ]
+                    [ HH.text "profile.firstName" ]
                 , HH.input
-                    [ HP.id_ "first-name"
-                    , HP.class_ $ HH.className "first-name sh-input"
+                    [ HP.id_ "profile.firstName"
+                    , HP.class_ $ HH.className (inputCls "profile.firstName" errors)
                     , HP.placeholder "First name"
                     , HP.value u.firstName
                     , HE.onValueChange $ HE.input UpdateFirstName
@@ -133,11 +138,11 @@ renderForm u =
             , HH.div
                 [ HP.class_ $ HH.className "form-group" ]
                 [ HH.label
-                    [ HP.for "last-name" ]
+                    [ HP.for "profile.lastName" ]
                     [ HH.text "Last name" ]
                 , HH.input
-                    [ HP.id_ "last-name"
-                    , HP.class_ $ HH.className "last-name sh-input"
+                    [ HP.id_ "profile.lastName"
+                    , HP.class_ $ HH.className (inputCls "profile.lastName" errors)
                     , HP.placeholder "Last name"
                     , HP.value u.firstName
                     , HE.onValueChange $ HE.input UpdateLastName
@@ -146,11 +151,11 @@ renderForm u =
             , HH.div
                 [ HP.class_ $ HH.className "form-group" ]
                 [ HH.label
-                    [ HP.for "user-email" ]
+                    [ HP.for "profile.email" ]
                     [ HH.text "Email" ]
                 , HH.input
-                    [ HP.id_ "user-email"
-                    , HP.class_ $ HH.className "user-email sh-input"
+                    [ HP.id_ "profile.email"
+                    , HP.class_ $ HH.className (inputCls "profile.email" errors)
                     , HP.placeholder "User email"
                     , HP.value u.firstName
                     , HE.onValueChange $ HE.input UpdateEmail
@@ -160,18 +165,13 @@ renderForm u =
         ]
     ]
 
-profileV :: Profile -> Errors (M.Map String String) Profile
-profileV p = mkProfile <$> (SV.nes "FirstName" p.firstName) <*> (SV.email "Email" p.email)
-  where
-    mkProfile :: String -> String -> Profile
-    mkProfile =
-      { userId: p.userId
-      , firstName: _
-      , lastName: p.lastName
-      , email: _
-      , username: p.username
-      , errors: M.empty
-      }
+profileForm :: forall m. Monad m => UserId -> Form String m (User UserAttributes)
+profileForm id = { firstName: _, lastName: _, email: _, username: _ }
+  <$> "firstName"   .: check "First name field cant be empty" (not <<< S.null) (text Nothing)
+  <*> "lastName"    .: text Nothing
+  <*> "email"       .: check "Invalid email" EV.isValid (text Nothing)
+  <*> "username"    .: text Nothing
+  <#> user (Just id)
 
 fromUser :: User UserAttributes -> Profile
 fromUser u =

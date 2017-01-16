@@ -25,6 +25,7 @@ import Shopie.ShopieM.Notification as QN
 data ListQuery a
   = Init a
   | Push QN.Notification a
+  | RemoveItem NotifId a
   | RemoveAll a
 
 type NotifId = Int
@@ -87,9 +88,14 @@ eval :: ListQuery ~> NotifListDSL
 eval (Init next) = do
   Wiring { notify } <- H.liftH $ H.liftH ask
   forever (raise' <<< H.action <<< Push =<< H.fromAff (Bus.read notify))
-eval (Push (QN.Notification n) next) = do
-  nextId <- H.gets (_.nextId) <* H.modify (addNotification n.level n.message)
-  n.timeout `maybeRemoveLater` nextId $> next
+eval (Push (QN.Notification { level, message, timeout}) next) = do
+  i <- H.gets (_.nextId) <* H.modify (addNotification level message)
+  case timeout of
+    Nothing -> pure next
+    Just (Milliseconds ms) ->
+      let d = Int.floor $ Math.max ms zero in
+      H.fromAff (later' d (pure unit)) *> raise' (H.action (RemoveItem i)) $> next
+eval (RemoveItem i next) = H.modify (removeMessage (NotifSlot i)) $> next
 eval (RemoveAll next) = H.queryAll (H.action (ToggleRemoved true)) $> next
 
 peek:: forall a. H.ChildF NotifSlot NotifQuery a -> NotifListDSL Unit
@@ -107,11 +113,3 @@ addNotification lvl msg st =
 removeMessage :: NotifSlot -> NotifList -> NotifList
 removeMessage (NotifSlot t) st =
   st { notifications = M.delete t st.notifications }
-
-maybeRemoveLater :: Maybe Milliseconds -> NotifId -> NotifListDSL Unit
-maybeRemoveLater mm nid = maybe (pure unit) raiseNotification mm
-  where
-    raiseNotification :: Milliseconds -> NotifListDSL Unit
-    raiseNotification (Milliseconds ms) =
-      let defer = H.fromAff $ later' (Int.floor $ Math.max ms zero) (pure unit)
-      in defer *> H.modify (removeMessage (NotifSlot nid))

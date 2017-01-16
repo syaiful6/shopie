@@ -38,7 +38,7 @@ queryFieldForm query = do
 
 envDOM :: forall m eff. MonadEff (dom :: DOM | eff) m => Env m
 envDOM path = do
-  v <- queryFieldForm $ fromPath path
+  v <- queryFieldForm ("." <> fromPath path)
   case v of
     Nothing -> pure $ Nil
     Just x ->  liftEff (singleton <<< TextInput <$> value x)
