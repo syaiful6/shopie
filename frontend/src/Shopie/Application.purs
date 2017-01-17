@@ -22,11 +22,13 @@ import Shopie.Auth.Login as AL
 import Shopie.Halogen.EventSource (raise')
 import Shopie.Notification.List as NL
 import Shopie.Route.Types as RT
+import Shopie.Render.StateMode as ST
 import Shopie.ShopieM (Shopie, Wiring(..), liftQyson)
 import Shopie.User.Model as UM
 import Shopie.User.Profile as UP
 
 import Qyson.QysonF (readFile, jsonModeApi)
+
 
 data AppQ a
   = GetRoute (RT.Locations -> a)
@@ -39,6 +41,7 @@ data AppQ a
 type AppS =
   { route :: RT.Locations
   , user :: Maybe (UM.User UM.UserAttributes)
+  , stateMode :: ST.StateMode
   }
 
 anonym :: UM.User UM.UserAttributes
@@ -53,6 +56,7 @@ initialState :: AppS
 initialState =
   { route: RT.Login
   , user: Nothing
+  , stateMode: ST.Loading
   }
 
 data NotifListSlot = NotifListSlot
@@ -113,12 +117,21 @@ render s =
     [ renderNotification
     , HH.div
         [ HP.class_ $ HH.className "sh-viewport" ]
-        [ renderView s.route s.user ]
+        [ showLoadOrView s ]
     ]
 
 renderNotification :: AppHTML
 renderNotification = HH.slot' cpN NotifListSlot $
   \_-> { component: NL.list, initialState: H.parentState NL.initialState }
+
+showLoadOrView :: AppS -> AppHTML
+showLoadOrView { stateMode, route, user } = case stateMode of
+  ST.Loading ->
+    ST.loadingRender
+  ST.Ready ->
+    renderView route user
+  ST.Error error ->
+    HH.div_ [ HH.text "error" ]
 
 renderView :: RT.Locations -> Maybe (UM.User UM.UserAttributes) -> AppHTML
 renderView RT.Home _ =
@@ -143,22 +156,22 @@ renderView RT.NotFound _ =
 
 eval :: AppQ ~> AppDSL
 eval (Init next) = do
-  raiseUserUpdate =<< runMaybeT maybeAuthenticate
+  wrapAction $ raiseUserUpdate =<< runMaybeT maybeAuthenticate
   Wiring { auth } <- H.liftH $ H.liftH ask
   forever (raise' <<< H.action <<< ObserveAuth =<< H.fromAff (Bus.read auth.signinBus))
 eval (ObserveAuth msg next) = do
   case msg of
     SignInSuccess ->
-      (runMaybeT maybeAuthenticate >>= raiseUserUpdate) $> next
+      wrapAction (runMaybeT maybeAuthenticate >>= raiseUserUpdate) $> next
     _ ->
       pure next
 eval (Move RT.Login next) = do
   u <- H.gets (_.user)
-  unless (isJust u) $ H.modify (_ { route = RT.Login })
+  unless (isJust u) $ H.modify (_ { route = RT.Login, stateMode = ST.Ready })
   pure next
 eval (Move loc next) = do
   u <- H.gets (_.user)
-  when (isJust u) $ H.modify (_ { route = loc })
+  when (isJust u) $ H.modify (_ { route = loc, stateMode = ST.Ready })
   pure next
 eval (UpdateUser u next) =
   H.modify (_ { user = u }) $> next
@@ -182,7 +195,11 @@ maybeAuthenticate = do
     loc = rootDir </> dir "users" </> dir "me" </> file ""
 
 decodeUser :: Json -> Maybe (UM.User UM.UserAttributes)
-decodeUser js = do
-  d <- hush $ decodeJson js
-  e <- L.head <<< _.resources <<< unDocument =<< d
-  pure $ fromResource e
+decodeUser =
+  hush <<< decodeJson >=> L.head <<< _.resources <<< unDocument >=> pure <<< fromResource
+
+wrapAction :: forall a. AppDSL a -> AppDSL a
+wrapAction fa =
+  H.modify (_ { stateMode = ST.Loading })
+  *> fa
+  <* H.modify (_ { stateMode = ST.Ready })

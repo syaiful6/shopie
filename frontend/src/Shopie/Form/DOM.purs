@@ -8,7 +8,6 @@ import Control.Monad.Eff.Class (class MonadEff, liftEff)
 import Control.Monad.Except (runExcept)
 
 import Data.Either (either)
-import Data.Foldable (intercalate)
 import Data.Foreign (toForeign)
 import Data.List (List(Nil), singleton)
 import Data.Maybe (Maybe(..))
@@ -23,8 +22,8 @@ import DOM.HTML.HTMLInputElement (value)
 import DOM.HTML.Types (HTMLInputElement, htmlDocumentToParentNode, readHTMLInputElement)
 
 import Shopie.Form.Formlet (Form)
-import Shopie.Form.Types (Env, FormInput(TextInput), fromPath)
-import Shopie.Form.View (View, postForm)
+import Shopie.Form.Types (Env, FormInput(TextInput))
+import Shopie.Form.View (View, postForm, classify)
 
 queryFieldForm
   :: forall m eff. MonadEff (dom :: DOM | eff) m
@@ -39,7 +38,7 @@ queryFieldForm query = do
 
 envDOM :: forall m eff. MonadEff (dom :: DOM | eff) m => Env m
 envDOM path = do
-  v <- queryFieldForm ("." <> intercalate "-" path)
+  v <- queryFieldForm ("." <> classify path)
   case v of
     Nothing -> pure $ Nil
     Just x ->  liftEff (singleton <<< TextInput <$> value x)

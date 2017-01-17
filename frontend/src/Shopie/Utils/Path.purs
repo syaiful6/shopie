@@ -4,13 +4,10 @@ import Prelude
 
 import Control.Alt ((<|>))
 
-import Data.Array (intersect, null, (:))
-import Data.Char as Ch
 import Data.Either (Either(..), either, fromRight)
 import Data.Maybe (Maybe, maybe, fromMaybe)
 import Data.Path.Pathy (Sandboxed, Unsandboxed, Abs, Path, File, Rel, Dir, DirName(..),
-  FileName(..), peel, rootDir, (</>), file, canonicalize, printPath, parseAbsDir,
-  parseAbsFile, dir, relativeTo, renameDir)
+  FileName(..), peel, rootDir, (</>), file, parseAbsDir, parseAbsFile, dir, relativeTo, renameDir)
 import Data.Path.Pathy as P
 import Data.String as S
 import Data.String.Regex as Rgx

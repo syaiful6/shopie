@@ -22,6 +22,7 @@
 /* Layouts: Groups of Components
 /* ---------------------------------------------------------- */
 @import "layouts/main.css";
+@import "layouts/loading.css";
 @import "layouts/flow.css";
 @import "layouts/auth.css";
 @import "layouts/order.css";
