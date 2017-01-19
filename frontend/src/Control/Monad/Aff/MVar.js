@@ -1,107 +1,133 @@
 "use strict";
 
-// Content
-function Empty () {}
-
-function Full (v) {
-  this.val = v;
-}
-
-function Killed(err) {
-  this.err = err;
-}
-
-function Consumers(blocked) {
-  this.blocked = blocked;
-}
-
-function Producers(blocked) {
-  this.blocked = blocked;
-}
-
 exports._makeMVar = function (nonCanceler) {
   return function (success) {
-    return success({ state: new Empty() });
+    success({
+      consumers: [],
+      producers: [],
+      error: undefined
+    });
     return nonCanceler;
   };
-}
+};
 
-exports._takeMVar = function (nonCanceler, mvar) {
+exports._takeMVar = function (nonCanceler, avar) {
   return function (success, error) {
-    if (mvar.state instanceof Killed) {
-      error(mvar.state.err);
-    } else if (mvar.state instanceof Full) {
-      var val = mvar.state.val;
-      mvar.state = new Empty();
-      success(val);
-    } else if (mvar.state instanceof Empty) {
-      mvar.state = new Consumers([{success: success, error: error }]);
-    } else if (mvar.state instanceof Consumers) {
-      mvar.state.blocked.push({ success: success, error: error });
-    } else if (mvar.state instanceof Producers) {
-      mvar.state.blocked.shift()(success, error);
-      if (mvar.state.blocked.length === 0) {
-        mvar.state = new Empty();
-      }
-    }
-    return nonCanceler;
-  };
-}
-
-exports._putMVar = function (nonCanceler, mvar, a) {
-  return function (success, error) {
-    if (mvar.state instanceof Killed) {
-      error(mvar.state.err);
-    } else if (mvar.state instanceof Empty) {
-      mvar.state = new Full(a);
-      success();
-    } else if (mvar.state instanceof Full) {
-      var val = mvar.state.val;
-      var ns = new Producers([
-        function (s) {
-          s(val);
-          return nonCanceler;
-        },
-        function (s) {
-          s(a);
-          // so it block until consumed
-          success();
-          return nonCanceler;
-        }
-      ]);
-      mvar.state = ns;
-    } else if (mvar.state instanceof Consumers) {
-      var consumers = mvar.state.blocked.shift();
-      consumers.success(a);
-      if (mvar.state.blocked.length === 0) {
-        mvar.state = new Empty();
-      }
-      success();
-    } else if (mvar.state instanceof Producers) {
-      mvar.state.blocked.push(function (s) {
-        s(a);
-        success();
-      });
-    }
-    return nonCanceler;
-  };
-}
-
-exports._killMVar = function (nonCanceler, mvar, e) {
-  return function (success, error) {
-    if (mvar.state instanceof Killed) {
-      error(mvar.state.err);
-    } else if (mvar.state instanceof Consumers) {
-      var consumers = mvar.state.blocked;
-      while (consumers.length) {
-        consumers.shift().error(e);
-      }
-      mvar.state = new Killed(e);
-      success({});
+    if (avar.error !== undefined) {
+      error(avar.error);
+    } else if (avar.producers.length > 0) {
+      avar.producers.shift()(success, error);
     } else {
-      mvar.state = new Killed(e);
-      success({});
+      avar.consumers.push({ peek: false, success: success, error: error });
+    }
+
+    return nonCanceler;
+  };
+};
+
+exports._tryTakeMVar = function (nonCanceler, avar, nothing, just) {
+  return function (success, error) {
+    if (avar.error !== undefined) {
+      error(avar.error);
+    } else if (avar.producers.length > 0) {
+      avar.producers.shift()(function (x) {
+        success(just(x));
+        return nonCanceler
+      }, error);
+    } else {
+      success(nothing);
+    }
+    return nonCanceler;
+  };
+}
+
+exports._peekMVar = function (nonCanceler, avar) {
+  return function (success, error) {
+    if (avar.error !== undefined) {
+      error(avar.error);
+    } else if (avar.producers.length > 0) {
+      avar.producers[0](success, error);
+    } else {
+      avar.consumers.push({ peek: true, success: success, error: error });
     }
     return nonCanceler;
   };
 };
+
+exports._putMVar = function (nonCanceler, avar, a) {
+  return function (success, error) {
+    if (avar.error !== undefined) {
+      error(avar.error);
+    } else if (avar.producers.length > 0) {
+      avar.producers.push(function (s) {
+        s(a);
+        success();
+        return nonCanceler;
+      });
+    } else {
+      performPut(a, avar, success, nonCanceler);
+    }
+    return nonCanceler;
+  };
+};
+
+exports._tryPutMVar = function (nonCanceler, avar, a) {
+  return function (success, error) {
+    if (avar.error !== undefined) {
+      error(avar.error);
+    } else if (avar.producers.length > 0) {
+      success(false);
+    } else {
+      performPut(a, avar, success, nonCanceler, true);
+    }
+    return nonCanceler;
+  }
+}
+
+exports._killMVar = function (nonCanceler, avar, e) {
+  return function (success, error) {
+    if (avar.error !== undefined) {
+      error(avar.error);
+    } else {
+      avar.error = e;
+      while (avar.consumers.length) {
+        avar.consumers.shift().error(e);
+      }
+      success();
+    }
+
+    return nonCanceler;
+  };
+};
+
+function performPut(a, avar, success, nonCanceler, val) {
+  var shouldQueue = true;
+  var consumers = [];
+  var consumer;
+
+  while (true) {
+    consumer = avar.consumers.shift();
+    if (consumer) {
+      consumers.push(consumer);
+      if (consumer.peek) {
+        continue;
+      } else {
+        shouldQueue = false;
+      }
+    }
+    break;
+  }
+
+  if (shouldQueue) {
+    avar.producers.push(function (s) {
+      s(a);
+      return nonCanceler;
+    });
+  }
+
+  for (var i = 0; i < consumers.length; i++) {
+    consumers[i].success(a);
+  }
+
+  success(val);
+}
