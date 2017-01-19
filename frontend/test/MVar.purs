@@ -3,8 +3,7 @@ module Test.MVar where
 import Prelude
 
 import Control.Monad.Aff (Aff, runAff, forkAff, later, later', attempt, cancel)
-import Control.Monad.Aff.MVar (MVAR, makeMVar, makeMVar', takeMVar, putMVar, killMVar,
-  peekMVar, modifyMVar)
+import Control.Monad.Aff.MVar (MVAR, makeMVar, takeMVar, putMVar, killMVar, peekMVar)
 import Control.Monad.Eff.Exception (EXCEPTION, throwException, error)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Class (liftEff)
@@ -64,26 +63,6 @@ test_peekMVar = do
     when (not b) do
       throwError (error "Something horrible went wrong - peeked var is not true")
     liftEff $ log ("Success: Peeked value read from written var")
-
-  timeout 1000 do
-    x <- makeMVar
-    res <- makeMVar' 1
-    forkAff do
-      c <- peekMVar x
-      modifyMVar (_ + c) res
-      putMVar x 1000
-    forkAff do
-      c1 <- peekMVar x
-      modifyMVar (_ + c1) res
-      putMVar x 500
-    putMVar x 10
-    count <- takeMVar res
-    e <- takeMVar x
-    f <- takeMVar x
-    g <- takeMVar x
-    when (not (count == 21 && e == 10 && f == 1000 && g == 500)) do
-      throwError (error "Something horrible went wrong - peeked consumers/producer ordering")
-    liftEff $ log "Success: peekVar consumer/producer order maintained"
 
 main :: forall e. Eff (console :: CONSOLE, mvar :: MVAR, err :: EXCEPTION | e) Unit
 main =

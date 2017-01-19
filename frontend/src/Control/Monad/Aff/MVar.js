@@ -16,7 +16,7 @@ exports._takeMVar = function (nonCanceler, avar) {
     if (avar.error !== undefined) {
       error(avar.error);
     } else if (avar.producers.length > 0) {
-      avar.producers.shift()(success, error);
+      avar.producers.shift()(success, error, false);
     } else {
       avar.consumers.push({ peek: false, success: success, error: error });
     }
@@ -33,7 +33,7 @@ exports._tryTakeMVar = function (nonCanceler, avar, nothing, just) {
       avar.producers.shift()(function (x) {
         success(just(x));
         return nonCanceler
-      }, error);
+      }, error, false);
     } else {
       success(nothing);
     }
@@ -46,7 +46,7 @@ exports._peekMVar = function (nonCanceler, avar) {
     if (avar.error !== undefined) {
       error(avar.error);
     } else if (avar.producers.length > 0) {
-      avar.producers[0](success, error);
+      avar.producers[0](success, error, true);
     } else {
       avar.consumers.push({ peek: true, success: success, error: error });
     }
@@ -59,9 +59,11 @@ exports._putMVar = function (nonCanceler, avar, a) {
     if (avar.error !== undefined) {
       error(avar.error);
     } else if (avar.producers.length > 0) {
-      avar.producers.push(function (s) {
+      avar.producers.push(function (s, err, peek) {
         s(a);
-        success();
+        if (!peek) {
+          success();
+        }
         return nonCanceler;
       });
     } else {

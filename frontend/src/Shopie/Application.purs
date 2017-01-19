@@ -163,6 +163,8 @@ eval (ObserveAuth msg next) = do
   case msg of
     SignInSuccess ->
       wrapAction (runMaybeT maybeAuthenticate >>= raiseUserUpdate) $> next
+    SignOutRequest ->
+      H.modify (_ { user = Nothing }) $> next
     _ ->
       pure next
 eval (Move RT.Login next) = do

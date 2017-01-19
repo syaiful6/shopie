@@ -16,7 +16,7 @@ import Halogen.HTML.Properties as HP
 
 import Math as Math
 
-import Shopie.Halogen.EventSource (raise')
+import Shopie.Halogen.EventSource (forkQuery', raise')
 import Shopie.Notification.Item (notification, NotifQuery(..), NotificationItem)
 import Shopie.ShopieM (Shopie, Wiring(..))
 import Shopie.ShopieM.Notification as QN
@@ -94,7 +94,7 @@ eval (Push (QN.Notification { level, message, timeout}) next) = do
     Nothing -> pure next
     Just (Milliseconds ms) ->
       let d = Int.floor $ Math.max ms zero in
-      H.fromAff (later' d (pure unit)) *> raise' (H.action (RemoveItem i)) $> next
+      forkQuery' (later' d (pure i)) RemoveItem $> next
 eval (RemoveItem i next) = H.modify (removeMessage (NotifSlot i)) $> next
 eval (RemoveAll next) = H.queryAll (H.action (ToggleRemoved true)) $> next
 

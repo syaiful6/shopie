@@ -28,7 +28,7 @@ loadingRender =
     [ HH.div
         [ HP.class_ $ HH.className "row" ]
         [ HH.div
-            [ HP.class_ $ HH.className "spinner" ]
+            [ HP.class_ $ HH.className "loading-spinner" ]
             [ HH.div
                 [ HP.class_ $ HH.className "double-bounce1" ]
                 []
