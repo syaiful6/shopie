@@ -11,10 +11,10 @@ import Control.Monad.Eff.Class (liftEff)
 
 import DOM (DOM)
 import DOM.Event.EventTarget (eventListener, addEventListener)
-import DOM.HTML (window, location)
+import DOM.HTML (window)
 import DOM.HTML.Event.EventTypes (click)
 import DOM.HTML.Types (Location, htmlDocumentToEventTarget)
-import DOM.HTML.Window (document)
+import DOM.HTML.Window (document, location)
 
 
 -- | create aff that listen to event listener

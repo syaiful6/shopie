@@ -1,4 +1,8 @@
-module Shopie.Route where
+module Shopie.Route
+  ( routing
+  , module Shopie.Route.Class
+  , module Shopie.Route.Types
+  ) where
 
 import Prelude
 
@@ -9,7 +13,8 @@ import Data.Int (floor)
 import Routing.Match (Match)
 import Routing.Match.Class (lit, num)
 
-import Shopie.Route.Types (CRUD(..), Locations(..))
+import Shopie.Route.Class (class NavigateDSL, navigate)
+import Shopie.Route.Types (CRUD(..), Locations(..), class RouteLink, link)
 
 
 onSlash :: Match Unit

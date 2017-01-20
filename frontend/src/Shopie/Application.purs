@@ -150,7 +150,7 @@ renderView RT.Profile u =
     Nothing ->
       HH.div_ [ HH.text "Login to edit your profile" ]
 renderView (RT.Order c) _ =
-  HH.div_ [ HH.text ("Order" <> show c) ]
+  HH.div_ [ HH.text ("Order " <> show c) ]
 renderView RT.NotFound _ =
   HH.div_ [ HH.text "NotFound" ]
 

@@ -7,9 +7,12 @@ import Control.Applicative.Free (hoistAp, restractAp)
 import Control.Monad.Aff (Aff)
 import Control.Monad.Aff.Bus as Bus
 import Control.Monad.Aff.Unsafe (unsafeCoerceAff)
+import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Free (foldFree)
 import Control.Monad.Fork (fork)
 import Control.Monad.Reader (runReaderT)
+
+import DOM.HTML.Location (setHash)
 
 import Network.HTTP.AffjaxF as AXF
 import Network.HTTP.Affjax.Request (RequestContent)
@@ -23,9 +26,11 @@ import Shopie.Auth.AuthF.Interpreter.Affable as AIA
 import Shopie.Auth.Class (invalidate)
 import Shopie.Auth.Types (TokenId(..))
 import Shopie.Effects (ShopieEffects)
+import Shopie.Route (link)
 import Shopie.ShopieM.ForkF as SF
 import Shopie.ShopieM.ShopieM (ShopieF(..), ShopieFC, ShopieM, ShopieAp(..), unShopieM,
   getAuthTokenId)
+import Shopie.Utils.DOM (locationObj)
 import Shopie.Wiring (Wiring(..))
 
 
@@ -57,6 +62,8 @@ runShopieM wiring@(Wiring { auth, notify }) = foldFree go <<< unShopieM
         goFork f
       Notify msg a ->
         Bus.write msg notify $> a
+      Navigate loc a ->
+        liftEff (locationObj >>= setHash (link loc)) $> a
 
     evalQyson :: QysonF ~> Aff (ShopieEffects eff)
     evalQyson =

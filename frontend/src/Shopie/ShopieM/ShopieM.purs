@@ -18,6 +18,7 @@ import Shopie.Auth.AuthF as AT
 import Shopie.Auth.Types (Email, TokenId)
 import Shopie.Auth.Class (class AuthDSL)
 import Shopie.Effects (ShopieEffects)
+import Shopie.Route (class NavigateDSL, Locations)
 import Shopie.ShopieM.ForkF as SF
 import Shopie.ShopieM.Notification (class NotifyQ, Notification)
 import Shopie.Wiring (Wiring)
@@ -27,6 +28,7 @@ data ShopieF eff a
   = Aff (Aff eff a)
   | Halt String a
   | Par (ShopieAp eff a)
+  | Navigate Locations a
   | Notify Notification a
   | Fork (SF.Fork (ShopieM eff) a)
 
@@ -37,6 +39,7 @@ instance functorShopieF :: Functor (ShopieF eff) where
     Par sa -> Par (map f sa)
     Fork fa -> Fork (map f fa)
     Notify n a -> Notify n (f a)
+    Navigate loc a -> Navigate loc (f a)
 
 type ShopieFC eff = Coproduct (QC.ConfigF Wiring) (Coproduct AT.AuthF (Coproduct QysonF (ShopieF eff)))
 
@@ -90,6 +93,9 @@ instance authDSLShopieM :: AuthDSL (ShopieM eff) where
   authenticate = ShopieM <<< liftF <<< right <<< left <<< AT.authenticateF
   maybeAuthId = ShopieM $ liftF $ right $ left $ AT.maybeAuthIdF
   invalidate = ShopieM $ liftF $ right $ left $ AT.invalidateF
+
+instance navigateDSLShopieM :: NavigateDSL (ShopieM eff) where
+  navigate = ShopieM <<< liftF <<< right <<< right <<< right <<< flip Navigate unit
 
 newtype ShopieAp eff a = ShopieAp (FreeAp (ShopieM eff) a)
 

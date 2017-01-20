@@ -5,5 +5,6 @@ module Shopie.NavMenu.Component.Query
 
 data NavMenuQuery a
   = Init a
-  | ToggleUserMenu Boolean a
-  | ToggleHelpMenu Boolean a
+  | ToggleAll a
+  | ToggleUserMenu a
+  | ToggleHelpMenu a

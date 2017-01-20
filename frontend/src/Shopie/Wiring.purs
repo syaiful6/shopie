@@ -4,8 +4,7 @@ import Prelude
 
 import Control.Monad.Aff.Bus as Bus
 import Control.Monad.Aff (forkAff)
-import Control.Monad.Aff.Free (class Affable, fromAff, fromEff)
-import Control.Monad.Eff.Class (liftEff)
+import Control.Monad.Aff.Free (class Affable, fromAff)
 
 import Network.HTTP.Affjax as AX
 
@@ -52,9 +51,7 @@ makeWiring basePath oc = fromAff $
   <#> Wiring
 
 makeBodyClick :: forall m eff. (Affable (ShopieEffects eff) m) => m (Bus.BusRW Unit)
-makeBodyClick = do
+makeBodyClick = fromAff do
   bus <- Bus.make
-  forkAff $ do
-    liftEff bodyClick
-    Bus.write unit bus
+  forkAff (bodyClick >>= flip Bus.write bus)
   pure bus
