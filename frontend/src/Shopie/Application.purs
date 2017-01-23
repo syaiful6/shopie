@@ -6,8 +6,11 @@ import Control.Monad.Aff.Bus as Bus
 import Control.Error.Util (hush)
 
 import Data.Argonaut.Core (Json)
+import Data.Functor.Coproduct.Nested (Coproduct4)
 import Data.Argonaut.Decode (decodeJson)
+import Data.Either.Nested (Either4)
 import Data.List as L
+import Data.Lens ((^.))
 import Data.Path.Pathy ((</>), file, dir, rootDir)
 
 import Halogen as H
@@ -25,6 +28,8 @@ import Shopie.Route.Types as RT
 import Shopie.Render.StateMode as ST
 import Shopie.ShopieM (Shopie, Wiring(..), liftQyson)
 import Shopie.User.Model as UM
+import Shopie.NavMenu.Component (NavMenuSlot(..), NavMenuQuery, NavMenuState, navMenu,
+  makeNavState)
 import Shopie.User.Profile as UP
 
 import Qyson.QysonF (readFile, jsonModeApi)
@@ -71,9 +76,9 @@ data LoginSlot = LoginSlot
 derive instance eqLoginSlot :: Eq LoginSlot
 derive instance ordLoginSlot :: Ord LoginSlot
 
-type ChildS    = Either NL.StateP (Either UP.Profile AL.LoginSP)
-type ChildQ    = Coproduct NL.QueryP (Coproduct UP.ProfileQ AL.LoginQP)
-type ChildSlot = Either NotifListSlot (Either ProfileSlot LoginSlot)
+type ChildS    = Either4 NL.StateP UP.Profile AL.LoginSP NavMenuState
+type ChildQ    = Coproduct4 NL.QueryP UP.ProfileQ AL.LoginQP NavMenuQuery
+type ChildSlot = Either4 NotifListSlot ProfileSlot LoginSlot NavMenuSlot
 
 -- | path to notification
 cpN :: ChildPath NL.StateP ChildS NL.QueryP ChildQ NotifListSlot ChildSlot
@@ -85,7 +90,10 @@ cpP = cpR :> cpL
 
 -- | path to login
 cpLo :: ChildPath AL.LoginSP ChildS AL.LoginQP ChildQ LoginSlot ChildSlot
-cpLo = cpR :> cpR
+cpLo = cpR :> cpR :> cpL
+
+cpNav :: ChildPath NavMenuState ChildS NavMenuQuery ChildQ NavMenuSlot ChildSlot
+cpNav = cpR :> cpR :> cpR :> cpL
 
 -- | Parent state
 type AppSP  = H.ParentState AppS ChildS AppQ ChildQ Shopie ChildSlot
@@ -117,12 +125,25 @@ render s =
     [ renderNotification
     , HH.div
         [ HP.class_ $ HH.className "sh-viewport" ]
-        [ showLoadOrView s ]
+        [ renderNavMenu s.route s.user
+        , showLoadOrView s
+        ]
     ]
 
 renderNotification :: AppHTML
 renderNotification = HH.slot' cpN NotifListSlot $
   \_-> { component: NL.list, initialState: H.parentState NL.initialState }
+
+renderNavMenu :: RT.Locations -> Maybe (UM.User UM.UserAttributes) -> AppHTML
+renderNavMenu route user = case route of
+  RT.Login ->
+    HH.text ""
+  _ ->
+    let user' = fromMaybe anonym user in
+    HH.slot' cpNav NavMenuSlot $ \_ ->
+      { component: navMenu
+      , initialState: makeNavState (user' ^. (UM._attr <<< UM._userR <<< UM._username))
+      }
 
 showLoadOrView :: AppS -> AppHTML
 showLoadOrView { stateMode, route, user } = case stateMode of

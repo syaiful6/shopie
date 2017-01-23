@@ -1,7 +1,8 @@
 module Shopie.NavMenu.Component.State
   ( NavMenuState
   , UserName
-  , initialState
+  , makeNavState
+  , closeAll
   , toggleAll
   , toggleUserMenu
   , toggleHelpMenu
@@ -9,9 +10,9 @@ module Shopie.NavMenu.Component.State
 
 import Control.Semigroupoid ((<<<))
 
-import Data.HeytingAlgebra (not)
+import Data.HeytingAlgebra (not, ff)
 
-import Shopie.Button.Dropdown (DropdownState(..))
+import Shopie.Button.Dropdown (DropdownState)
 
 type UserName = String
 
@@ -21,12 +22,15 @@ type NavMenuState =
   , helpMenu :: DropdownState
   }
 
-initialState ::  UserName -> NavMenuState
-initialState username =
+makeNavState ::  UserName -> NavMenuState
+makeNavState username =
   { username: username
-  , userMenu: DropdownClosed
-  , helpMenu: DropdownClosed
+  , userMenu: ff
+  , helpMenu: ff
   }
+
+closeAll :: NavMenuState -> NavMenuState
+closeAll st@{ userMenu, helpMenu } = st { userMenu = ff, helpMenu = ff }
 
 toggleAll :: NavMenuState -> NavMenuState
 toggleAll = toggleUserMenu <<< toggleHelpMenu

@@ -177,5 +177,5 @@ isAtomText x = isAlphaNum x || inClass "!#$%&'*+/=?^_`{|}~-" x
 takeWhile1 :: (Char -> Boolean) -> EmailParser String
 takeWhile1 f = fromCharArray <$> (A.some $ satisfy f)
 
-between1 :: forall f a b. Applicative f => f b -> f a -> f a
+between1 :: forall f a b. Apply f => f b -> f a -> f a
 between1 lr x = lr *> x <* lr

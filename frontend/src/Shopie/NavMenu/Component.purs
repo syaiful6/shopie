@@ -1,6 +1,8 @@
 module Shopie.NavMenu.Component
   ( NavMenuSlot(..)
   , navMenu
+  , module Shopie.NavMenu.Component.State
+  , module Shopie.NavMenu.Component.Query
   ) where
 
 import Shopie.Prelude
@@ -9,11 +11,13 @@ import Control.Monad.Aff.Bus as Bus
 
 import Halogen as H
 import Halogen.HTML.Indexed as HH
+import Halogen.HTML.Properties.Indexed as HP
 
 import Shopie.ShopieM (Shopie, Wiring(..))
 import Shopie.Halogen.EventSource (raise)
 import Shopie.NavMenu.Component.Render (renderUserMenu, renderNavBody)
-import Shopie.NavMenu.Component.State (NavMenuState, toggleAll, toggleUserMenu, toggleHelpMenu)
+import Shopie.NavMenu.Component.State (NavMenuState, closeAll, toggleAll, toggleUserMenu,
+  toggleHelpMenu, makeNavState)
 import Shopie.NavMenu.Component.Query (NavMenuQuery(..))
 
 
@@ -31,15 +35,15 @@ navMenu = H.lifecycleComponent
 
 render :: NavMenuState -> H.ComponentHTML NavMenuQuery
 render s =
-  HH.div_
-    [ renderUserMenu s
-    , renderNavBody s
-    ]
+  HH.nav
+    [ HP.class_ $ HH.className "sh-nav" ]
+    (renderUserMenu s <> [ renderNavBody s ])
 
 eval :: NavMenuQuery ~> H.ComponentDSL NavMenuState NavMenuQuery Shopie
 eval (Init _) = do
   Wiring { bodyClick } <- H.liftH ask
-  forever (raise <<< ToggleAll =<< H.fromAff (Bus.read bodyClick))
+  forever (raise <<< CloseAll =<< H.fromAff (Bus.read bodyClick))
+eval (CloseAll next) = H.modify closeAll $> next
 eval (ToggleAll next) = H.modify toggleAll $> next
 eval (ToggleUserMenu next) = H.modify toggleUserMenu $> next
 eval (ToggleHelpMenu next) = H.modify toggleHelpMenu $> next
